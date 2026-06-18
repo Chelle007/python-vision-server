@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vision-server"
+version = "0.2.0"
+description = "Python vision server for hand/face tracking and gesture classification"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "mediapipe>=0.10.21",
+    "opencv-python>=4.11.0",
+    "numpy>=1.26.4",
+    "tensorflow>=2.16.2",
+    "scikit-learn>=1.8.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+vision-server = "vision_server.app:main"
+vision-record = "vision_server.recording:main"
+vision-train = "vision_server.training:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-dir]
+"" = "src"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

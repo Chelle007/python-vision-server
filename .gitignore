@@ -4,3 +4,14 @@ __pycache__/
 .DS_Store
 *.pyo
 .pytest_cache/
+*.egg-info/
+dist/
+build/
+
+data/
+models/
+*.npy
+*.keras
+
+# Legacy paths (pre-restructure)
+Dataset/

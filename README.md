@@ -7,13 +7,14 @@ Python backend for **Gaming with Bare Hands** (CSIT321 FYP). Captures webcam inp
 ## What This Does
 
 
-| Component                                | Role                                                         |
-| ---------------------------------------- | ------------------------------------------------------------ |
-| **MediaPipe Hands**                      | Tracks 21 landmarks per hand (up to 2 hands)                 |
-| **MediaPipe Face Mesh**                  | Head yaw/pitch for camera control                            |
-| **Heuristics** (`gesture_heuristics.py`) | Static gestures — fist, open palm, index up, peace, rotation |
-| **LSTM** (`lstm_classifier.py`)          | Dynamic puzzle gestures — `Idle`, `Turn_Key`, `Pull_Lever`   |
-| **UDP**                                  | Sends JSON every frame to Unity at `127.0.0.1:5052`          |
+| Component                              | Role                                                                |
+| -------------------------------------- | ------------------------------------------------------------------- |
+| **MediaPipe Hands**                    | Tracks 21 landmarks per hand (up to 2 hands)                        |
+| **MediaPipe Face Mesh**                | Head yaw/pitch for camera control                                   |
+| **Hand heuristics** (`gestures/hand/`) | Static gestures — fist, open palm, index up, peace, pinch, rotation |
+| **Head heuristics** (`gestures/head/`) | Head orientation (yaw/pitch); extensible for nod/shake/tilt         |
+| **LSTM** (`gestures/dynamic/`)         | Dynamic puzzle gestures — `Idle`, `Turn_Key`, `Pull_Lever`          |
+| **UDP**                                | Sends JSON every frame to Unity at `127.0.0.1:5052`                 |
 
 
 ### Hand roles
@@ -29,7 +30,7 @@ Python backend for **Gaming with Bare Hands** (CSIT321 FYP). Captures webcam inp
 
 ## Requirements
 
-- Python **3.11** (recommended — matches project setup)
+- Python **3.11** (recommended)
 - Webcam
 - Unity game running with `UDPReceiver.cs` on port **5052**
 
@@ -40,18 +41,21 @@ Python backend for **Gaming with Bare Hands** (CSIT321 FYP). Captures webcam inp
 ```bash
 cd python-vision-server
 
-# Create virtual environment
 python3.11 -m venv .venv
-
-# Activate
 source .venv/bin/activate        # macOS / Linux
 # .venv\Scripts\activate         # Windows
 
-# Install dependencies
+# 1. Pinned deps (TensorFlow, NumPy 1.26.x, MediaPipe — required for LSTM train/load)
 pip install -r requirements.txt
+
+# 2. Install this repo as a package (imports + vision-server commands)
+pip install -e .
+
+# Optional: run tests
+pip install pytest
 ```
 
-> Training needs TensorFlow (included in `requirements.txt`). If you only run the server with a pre-trained `escape_gestures.keras`, heuristics still work without TF — but LSTM inference will show `No Model`.
+> Use **Python 3.11**. `requirements.txt` pins versions that work together (e.g. NumPy 1.26.4 with TensorFlow 2.16.2).
 
 ---
 
@@ -61,7 +65,8 @@ pip install -r requirements.txt
 
 ```bash
 source .venv/bin/activate
-python main_server.py
+python scripts/run_server.py
+# or: vision-server
 ```
 
 - A webcam window opens with gesture overlays
@@ -83,11 +88,11 @@ python main_server.py
 
 ## Record Training Data
 
-Use `data_recorder.py` to capture 30-frame landmark sequences for the LSTM.
+Use `scripts/record_data.py` to capture 30-frame landmark sequences for the LSTM.
 
 ### 1. Set the gesture name
 
-Open `data_recorder.py` and change:
+Open `src/vision_server/recording.py` and change:
 
 ```python
 GESTURE_NAME = "Idle"   # e.g. "Turn_Key", "Pull_Lever", "FP_Turn_Key"
@@ -96,7 +101,8 @@ GESTURE_NAME = "Idle"   # e.g. "Turn_Key", "Pull_Lever", "FP_Turn_Key"
 ### 2. Run the recorder
 
 ```bash
-python data_recorder.py
+python scripts/record_data.py
+# or: vision-record
 ```
 
 ### 3. Controls
@@ -108,12 +114,12 @@ python data_recorder.py
 | **Q** | Quit                                          |
 
 
-Each clip = **30 frames** (~0.5s at 60fps). Saved as `.npy` in `Dataset/<GESTURE_NAME>/`.
+Each clip = **30 frames** (~0.5s at 60fps). Saved as `.npy` in `data/<GESTURE_NAME>/`.
 
-### 4. Dataset folders
+### 4. Data folders
 
 ```
-Dataset/
+data/
 ├── Idle/              # Normal idle / random hand movement
 ├── Turn_Key/          # Correct key-turn motion
 ├── Pull_Lever/        # Correct lever-pull motion
@@ -123,12 +129,6 @@ Dataset/
 
 **Target:** ~300 clips per folder. Use your **right hand**, same distance/angle you use in gameplay.
 
-### Tips for good data
-
-- Vary speed, angle, and distance slightly across clips
-- Record `FP_`* folders with motions that look similar but are **not** the target gesture
-- Keep lighting and background reasonably consistent
-
 ---
 
 ## Train the LSTM Model
@@ -136,24 +136,25 @@ Dataset/
 After recording data:
 
 ```bash
-python train_lstm.py
+python scripts/train_lstm.py
+# or: vision-train
 ```
 
 This will:
 
-1. Load all `.npy` files from `Dataset/` (see `FOLDER_MAPPING` in script)
+1. Load all `.npy` files from `data/` (see `FOLDER_MAPPING` in `src/vision_server/config.py`)
 2. Split 80% train / 20% test
 3. Train for 60 epochs
-4. Save model as `**escape_gestures.keras**`
+4. Save model as `models/escape_gestures.keras`
 
-Restart `main_server.py` to load the new model.
+Restart the vision server to load the new model.
 
 ### Adding a new dynamic gesture
 
-1. Add folder under `Dataset/` and record clips
-2. Update `FINAL_CLASSES` in `train_lstm.py` and `lstm_classifier.py`
-3. Update `FOLDER_MAPPING` in `train_lstm.py`
-4. Retrain → new `escape_gestures.keras`
+1. Add folder under `data/` and record clips
+2. Update `CLASSES` in `src/vision_server/gestures/dynamic/labels.py`
+3. Update `FOLDER_MAPPING` in `src/vision_server/config.py`
+4. Retrain → new `models/escape_gestures.keras`
 
 ---
 
@@ -161,15 +162,37 @@ Restart `main_server.py` to load the new model.
 
 ```
 python-vision-server/
-├── main_server.py          # Run this — live tracking + UDP to Unity
-├── data_recorder.py        # Record training clips
-├── train_lstm.py           # Train LSTM from Dataset/
-├── lstm_classifier.py      # LSTM inference (used by main_server)
-├── gesture_heuristics.py   # Static gesture rules
-├── escape_gestures.keras   # Trained model (generated by train_lstm.py)
+├── pyproject.toml
 ├── requirements.txt
-├── Dataset/                # Training data (.npy clips)
-└── README.md
+├── README.md
+├── scripts/
+│   ├── run_server.py       # Live tracking + UDP to Unity
+│   ├── record_data.py      # Record training clips
+│   └── train_lstm.py       # Train LSTM from data/
+├── src/vision_server/
+│   ├── app.py              # Main loop
+│   ├── config.py           # Ports, frame counts, thresholds, paths
+│   ├── features.py         # Shared landmark flattening
+│   ├── udp.py              # UDP socket + payload builder
+│   ├── overlay.py          # On-screen HUD
+│   ├── recording.py        # Data recorder logic
+│   ├── training.py         # LSTM training logic
+│   ├── tracking/           # MediaPipe wrappers (hands, face)
+│   └── gestures/
+│       ├── hand/           # Static hand rules (registry-based)
+│       ├── head/           # Head rules (registry-based)
+│       └── dynamic/        # LSTM inference + class labels
+├── models/escape_gestures.keras   # gitignored
+├── data/                          # Training data (.npy clips), gitignored
+└── tests/
+```
+
+---
+
+## Tests
+
+```bash
+pytest
 ```
 
 ---
@@ -179,15 +202,16 @@ python-vision-server/
 Key fields teammates may use:
 
 
-| Field                                  | Type   | Description                          |
-| -------------------------------------- | ------ | ------------------------------------ |
-| `head_yaw`, `head_pitch`               | float  | Head orientation (−1 to 1)           |
-| `leftFist`, `leftIndexUp`, `leftPeace` | bool   | Left-hand movement                   |
-| `rightFist`, `rightOpenPalm`           | bool   | Right-hand interaction               |
-| `palmX`, `palmY`                       | float  | Right palm screen position           |
-| `fistRotX/Y/Z`                         | float  | Right-hand rotation (inspect)        |
-| `lstm_gesture`                         | string | `Idle`, `Turn_Key`, or `Pull_Lever`  |
-| `hands[]`                              | array  | Per-hand landmarks + world landmarks |
+| Field                                  | Type   | Description                            |
+| -------------------------------------- | ------ | -------------------------------------- |
+| `head_yaw`, `head_pitch`               | float  | Head orientation (−1 to 1)             |
+| `leftFist`, `leftIndexUp`, `leftPeace` | bool   | Left-hand movement                     |
+| `rightFist`, `rightOpenPalm`           | bool   | Right-hand interaction                 |
+| `pinching`                             | bool   | Right-hand pinch (thumb + index close) |
+| `palmX`, `palmY`                       | float  | Right palm screen position             |
+| `fistRotX/Y/Z`                         | float  | Right-hand rotation (inspect)          |
+| `lstm_gesture`                         | string | `Idle`, `Turn_Key`, or `Pull_Lever`    |
+| `hands[]`                              | array  | Per-hand landmarks + world landmarks   |
 
 
 ---
@@ -195,12 +219,13 @@ Key fields teammates may use:
 ## Troubleshooting
 
 
-| Problem              | Try                                                               |
-| -------------------- | ----------------------------------------------------------------- |
-| `No Model` on screen | Run `train_lstm.py` or check `escape_gestures.keras` exists       |
-| Unity not responding | Unity must be running first; check port 5052                      |
-| Hand not detected    | Better lighting, plain background, hand closer to camera          |
-| LSTM always `Idle`   | Confidence < 0.8 — retrain with more data or check gesture motion |
-| Webcam won't open    | Close other apps using the camera                                 |
+| Problem              | Try                                                                             |
+| -------------------- | ------------------------------------------------------------------------------- |
+| `No Model` on screen | Run `scripts/train_lstm.py` or check `models/escape_gestures.keras` exists      |
+| Unity not responding | Unity must be running first; check port 5052                                    |
+| Hand not detected    | Better lighting, plain background, hand closer to camera                        |
+| LSTM always `Idle`   | Confidence < 0.8 — retrain with more data or check gesture motion               |
+| Webcam won't open    | Close other apps using the camera                                               |
+| Import errors        | Run `pip install -r requirements.txt` then `pip install -e .` from project root |
 
 
