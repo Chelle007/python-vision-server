@@ -1,0 +1,206 @@
+# Python Vision Server
+
+Python backend for **Gaming with Bare Hands** (CSIT321 FYP). Captures webcam input, tracks hands and head with MediaPipe, classifies gestures, and sends data to Unity over UDP.
+
+---
+
+## What This Does
+
+
+| Component                                | Role                                                         |
+| ---------------------------------------- | ------------------------------------------------------------ |
+| **MediaPipe Hands**                      | Tracks 21 landmarks per hand (up to 2 hands)                 |
+| **MediaPipe Face Mesh**                  | Head yaw/pitch for camera control                            |
+| **Heuristics** (`gesture_heuristics.py`) | Static gestures — fist, open palm, index up, peace, rotation |
+| **LSTM** (`lstm_classifier.py`)          | Dynamic puzzle gestures — `Idle`, `Turn_Key`, `Pull_Lever`   |
+| **UDP**                                  | Sends JSON every frame to Unity at `127.0.0.1:5052`          |
+
+
+### Hand roles
+
+
+| Hand      | Used for                                | Detection         |
+| --------- | --------------------------------------- | ----------------- |
+| **Left**  | Movement (move, jump, crouch)           | Heuristics        |
+| **Right** | Grab, release, inspect, puzzle gestures | Heuristics + LSTM |
+
+
+---
+
+## Requirements
+
+- Python **3.11** (recommended — matches project setup)
+- Webcam
+- Unity game running with `UDPReceiver.cs` on port **5052**
+
+---
+
+## Setup (first time)
+
+```bash
+cd python-vision-server
+
+# Create virtual environment
+python3.11 -m venv .venv
+
+# Activate
+source .venv/bin/activate        # macOS / Linux
+# .venv\Scripts\activate         # Windows
+
+# Install dependencies
+pip install -r requirements.txt
+```
+
+> Training needs TensorFlow (included in `requirements.txt`). If you only run the server with a pre-trained `escape_gestures.keras`, heuristics still work without TF — but LSTM inference will show `No Model`.
+
+---
+
+## Run the Vision Server
+
+**Start Unity first**, then:
+
+```bash
+source .venv/bin/activate
+python main_server.py
+```
+
+- A webcam window opens with gesture overlays
+- Press **Q** to quit
+- Check terminal for: `Combined Vision Server Running. Sending UDP to 127.0.0.1:5052`
+
+### On-screen labels
+
+
+| Label                   | Meaning                                     |
+| ----------------------- | ------------------------------------------- |
+| `LEFT FIST = MOVE`      | Left-hand movement gesture detected         |
+| `RIGHT FIST = GRAB`     | Right-hand grab detected                    |
+| `AI LSTM: Turn_Key`     | Dynamic puzzle gesture detected             |
+| `Stabilizing... (n/30)` | LSTM buffer filling (needs 30 frames first) |
+
+
+---
+
+## Record Training Data
+
+Use `data_recorder.py` to capture 30-frame landmark sequences for the LSTM.
+
+### 1. Set the gesture name
+
+Open `data_recorder.py` and change:
+
+```python
+GESTURE_NAME = "Idle"   # e.g. "Turn_Key", "Pull_Lever", "FP_Turn_Key"
+```
+
+### 2. Run the recorder
+
+```bash
+python data_recorder.py
+```
+
+### 3. Controls
+
+
+| Key   | Action                                        |
+| ----- | --------------------------------------------- |
+| **R** | Start recording a clip (hand must be visible) |
+| **Q** | Quit                                          |
+
+
+Each clip = **30 frames** (~0.5s at 60fps). Saved as `.npy` in `Dataset/<GESTURE_NAME>/`.
+
+### 4. Dataset folders
+
+```
+Dataset/
+├── Idle/              # Normal idle / random hand movement
+├── Turn_Key/          # Correct key-turn motion
+├── Pull_Lever/        # Correct lever-pull motion
+├── FP_Turn_Key/       # Wrong motions → trained as Idle (reduce false positives)
+└── FP_Pull_Lever/
+```
+
+**Target:** ~300 clips per folder. Use your **right hand**, same distance/angle you use in gameplay.
+
+### Tips for good data
+
+- Vary speed, angle, and distance slightly across clips
+- Record `FP_`* folders with motions that look similar but are **not** the target gesture
+- Keep lighting and background reasonably consistent
+
+---
+
+## Train the LSTM Model
+
+After recording data:
+
+```bash
+python train_lstm.py
+```
+
+This will:
+
+1. Load all `.npy` files from `Dataset/` (see `FOLDER_MAPPING` in script)
+2. Split 80% train / 20% test
+3. Train for 60 epochs
+4. Save model as `**escape_gestures.keras**`
+
+Restart `main_server.py` to load the new model.
+
+### Adding a new dynamic gesture
+
+1. Add folder under `Dataset/` and record clips
+2. Update `FINAL_CLASSES` in `train_lstm.py` and `lstm_classifier.py`
+3. Update `FOLDER_MAPPING` in `train_lstm.py`
+4. Retrain → new `escape_gestures.keras`
+
+---
+
+## Project Structure
+
+```
+python-vision-server/
+├── main_server.py          # Run this — live tracking + UDP to Unity
+├── data_recorder.py        # Record training clips
+├── train_lstm.py           # Train LSTM from Dataset/
+├── lstm_classifier.py      # LSTM inference (used by main_server)
+├── gesture_heuristics.py   # Static gesture rules
+├── escape_gestures.keras   # Trained model (generated by train_lstm.py)
+├── requirements.txt
+├── Dataset/                # Training data (.npy clips)
+└── README.md
+```
+
+---
+
+## UDP Payload (sent to Unity every frame)
+
+Key fields teammates may use:
+
+
+| Field                                  | Type   | Description                          |
+| -------------------------------------- | ------ | ------------------------------------ |
+| `head_yaw`, `head_pitch`               | float  | Head orientation (−1 to 1)           |
+| `leftFist`, `leftIndexUp`, `leftPeace` | bool   | Left-hand movement                   |
+| `rightFist`, `rightOpenPalm`           | bool   | Right-hand interaction               |
+| `palmX`, `palmY`                       | float  | Right palm screen position           |
+| `fistRotX/Y/Z`                         | float  | Right-hand rotation (inspect)        |
+| `lstm_gesture`                         | string | `Idle`, `Turn_Key`, or `Pull_Lever`  |
+| `hands[]`                              | array  | Per-hand landmarks + world landmarks |
+
+
+---
+
+## Troubleshooting
+
+
+| Problem              | Try                                                               |
+| -------------------- | ----------------------------------------------------------------- |
+| `No Model` on screen | Run `train_lstm.py` or check `escape_gestures.keras` exists       |
+| Unity not responding | Unity must be running first; check port 5052                      |
+| Hand not detected    | Better lighting, plain background, hand closer to camera          |
+| LSTM always `Idle`   | Confidence < 0.8 — retrain with more data or check gesture motion |
+| Webcam won't open    | Close other apps using the camera                                 |
+
+
