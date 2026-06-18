@@ -3,7 +3,6 @@ from vision_server.gestures.hand.fist import is_fist
 from vision_server.gestures.hand.index_up import is_index_up
 from vision_server.gestures.hand.open_palm import is_open_palm
 from vision_server.gestures.hand.peace import is_peace_sign
-from vision_server.gestures.hand.pinch import is_pinching
 from conftest import make_landmarks
 
 
@@ -29,7 +28,7 @@ def _folded_fist_landmarks():
 
 def test_hand_rules_registry_contains_expected_gestures():
     names = {name for name, _ in HAND_RULES}
-    assert names == {"fist", "open_palm", "peace", "index_up", "pinch"}
+    assert names == {"fist", "open_palm", "peace", "index_up"}
 
 
 def test_is_fist_detects_folded_fingers():
@@ -86,16 +85,6 @@ def test_is_peace_sign():
         }
     )
     assert is_peace_sign(landmarks) is True
-
-
-def test_is_pinching_when_thumb_and_index_close():
-    landmarks = make_landmarks(
-        {
-            4: {"x": 0.5, "y": 0.5},
-            8: {"x": 0.51, "y": 0.51},
-        }
-    )
-    assert is_pinching(landmarks) is True
 
 
 def test_is_open_palm_with_extended_fingers():

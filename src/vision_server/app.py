@@ -117,7 +117,7 @@ def main():
                         lstm.register_hand_seen()
                         data["rightFist"] = gestures["fist"]
                         data["rightOpenPalm"] = gestures["open_palm"]
-                        data["pinching"] = gestures["pinch"]
+                        data["rightIndexUp"] = gestures["index_up"]
 
                         palm_x, palm_y = get_palm_position(landmarks)
 

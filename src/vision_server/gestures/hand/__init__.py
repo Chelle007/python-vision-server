@@ -14,6 +14,6 @@ def rule(name: str):
 
 
 # Import gesture modules so they self-register via @rule
-from . import fist, index_up, open_palm, peace, pinch  # noqa: E402, F401
+from . import fist, index_up, open_palm, peace  # noqa: E402, F401
 
 __all__ = ["HAND_RULES", "rule"]

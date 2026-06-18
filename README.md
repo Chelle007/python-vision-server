@@ -11,7 +11,7 @@ Python backend for **Gaming with Bare Hands** (CSIT321 FYP). Captures webcam inp
 | -------------------------------------- | ------------------------------------------------------------------- |
 | **MediaPipe Hands**                    | Tracks 21 landmarks per hand (up to 2 hands)                        |
 | **MediaPipe Face Mesh**                | Head yaw/pitch for camera control                                   |
-| **Hand heuristics** (`gestures/hand/`) | Static gestures — fist, open palm, index up, peace, pinch, rotation |
+| **Hand heuristics** (`gestures/hand/`) | Static gestures — fist, open palm, index up, peace, rotation |
 | **Head heuristics** (`gestures/head/`) | Head orientation (yaw/pitch); extensible for nod/shake/tilt         |
 | **LSTM** (`gestures/dynamic/`)         | Dynamic puzzle gestures — `Idle`, `Turn_Key`, `Pull_Lever`          |
 | **UDP**                                | Sends JSON every frame to Unity at `127.0.0.1:5052`                 |
@@ -207,7 +207,7 @@ Key fields teammates may use:
 | `head_yaw`, `head_pitch`               | float  | Head orientation (−1 to 1)             |
 | `leftFist`, `leftIndexUp`, `leftPeace` | bool   | Left-hand movement                     |
 | `rightFist`, `rightOpenPalm`           | bool   | Right-hand interaction                 |
-| `pinching`                             | bool   | Right-hand pinch (thumb + index close) |
+| `rightIndexUp`                         | bool   | Right-hand index up (e.g. stand from sit) |
 | `palmX`, `palmY`                       | float  | Right palm screen position             |
 | `fistRotX/Y/Z`                         | float  | Right-hand rotation (inspect)          |
 | `lstm_gesture`                         | string | `Idle`, `Turn_Key`, or `Pull_Lever`    |
