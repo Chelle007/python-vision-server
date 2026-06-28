@@ -11,6 +11,8 @@ def test_default_payload_has_unity_keys():
         "hand_up",
         "head_yaw",
         "head_pitch",
+        "tilt_left",
+        "tilt_right",
         "leftFist",
         "leftOpenPalm",
         "leftIndexUp",
@@ -36,5 +38,7 @@ def test_default_payload_types():
     data = default_payload()
     assert isinstance(data["leftFist"], bool)
     assert isinstance(data["head_yaw"], float)
+    assert isinstance(data["tilt_left"], bool)
+    assert isinstance(data["tilt_right"], bool)
     assert isinstance(data["hands"], list)
     assert isinstance(data["lstm_gesture"], str)

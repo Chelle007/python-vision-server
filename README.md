@@ -78,8 +78,10 @@ python scripts/run_server.py
 
 | Label                   | Meaning                                     |
 | ----------------------- | ------------------------------------------- |
-| `LEFT FIST = MOVE`      | Left-hand movement gesture detected         |
-| `RIGHT FIST = GRAB`     | Right-hand grab detected                    |
+| `LEFT FIST = MOVE`           | Left-hand movement gesture detected         |
+| `RIGHT FIST = GRAB`          | Right-hand grab detected                    |
+| `HEAD TILT LEFT = LOOK BACK` | Head rolled left (180° camera flip)         |
+| `HEAD TILT RIGHT = LOOK BACK`| Head rolled right (180° camera flip)        |
 | `AI LSTM: Turn_Key`     | Dynamic puzzle gesture detected             |
 | `Stabilizing... (n/30)` | LSTM buffer filling (needs 30 frames first) |
 
@@ -205,6 +207,7 @@ Key fields teammates may use:
 | Field                                  | Type   | Description                            |
 | -------------------------------------- | ------ | -------------------------------------- |
 | `head_yaw`, `head_pitch`               | float  | Head orientation (−1 to 1)             |
+| `tilt_left`, `tilt_right`              | bool   | Head roll left/right (ear to shoulder) |
 | `leftFist`, `leftIndexUp`, `leftPeace` | bool   | Left-hand movement                     |
 | `rightFist`, `rightOpenPalm`           | bool   | Right-hand interaction                 |
 | `rightIndexUp`                         | bool   | Right-hand index up (e.g. stand from sit) |

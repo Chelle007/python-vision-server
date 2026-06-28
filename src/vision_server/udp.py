@@ -16,6 +16,8 @@ def default_payload() -> dict:
         "hand_up": False,
         "head_yaw": 0.0,
         "head_pitch": 0.0,
+        "tilt_left": False,
+        "tilt_right": False,
         "leftFist": False,
         "leftOpenPalm": False,
         "leftIndexUp": False,

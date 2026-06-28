@@ -13,6 +13,6 @@ def rule(name: str):
     return decorator
 
 
-from . import orientation  # noqa: E402, F401
+from . import orientation, tilt  # noqa: E402, F401
 
 __all__ = ["HEAD_RULES", "rule"]
