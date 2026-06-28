@@ -80,8 +80,8 @@ python scripts/run_server.py
 | ----------------------- | ------------------------------------------- |
 | `LEFT FIST = MOVE`           | Left-hand movement gesture detected         |
 | `RIGHT FIST = GRAB`          | Right-hand grab detected                    |
-| `HEAD TILT LEFT = LOOK BACK` | Head rolled left (180° camera flip)         |
-| `HEAD TILT RIGHT = LOOK BACK`| Head rolled right (180° camera flip)        |
+| `HEAD TILT LEFT = TURN BACK` | Head rolled left (180° body turn counter-clockwise) |
+| `HEAD TILT RIGHT = TURN BACK`| Head rolled right (180° body turn clockwise)        |
 | `AI LSTM: Turn_Key`     | Dynamic puzzle gesture detected             |
 | `Stabilizing... (n/30)` | LSTM buffer filling (needs 30 frames first) |
 

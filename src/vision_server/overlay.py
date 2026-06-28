@@ -47,10 +47,10 @@ def build_overlay_lines(data: dict, lstm_display: str) -> list[tuple[str, tuple[
         overlay_lines.append(("RIGHT OPEN PALM = RELEASE", (0, 255, 0)))
 
     if data["tilt_left"]:
-        overlay_lines.append(("HEAD TILT LEFT = LOOK BACK", (0, 255, 0)))
+        overlay_lines.append(("HEAD TILT LEFT = TURN BACK", (0, 255, 0)))
 
     if data["tilt_right"]:
-        overlay_lines.append(("HEAD TILT RIGHT = LOOK BACK", (0, 255, 0)))
+        overlay_lines.append(("HEAD TILT RIGHT = TURN BACK", (0, 255, 0)))
 
     return overlay_lines
 
