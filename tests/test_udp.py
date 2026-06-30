@@ -20,6 +20,7 @@ def test_default_payload_has_unity_keys():
         "rightFist",
         "rightOpenPalm",
         "rightIndexUp",
+        "rightPeace",
         "landmarks",
         "openPalm",
         "isFist",

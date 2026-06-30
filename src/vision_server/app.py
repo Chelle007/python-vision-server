@@ -118,6 +118,7 @@ def main():
                         data["rightFist"] = gestures["fist"]
                         data["rightOpenPalm"] = gestures["open_palm"]
                         data["rightIndexUp"] = gestures["index_up"]
+                        data["rightPeace"] = gestures["peace"]
 
                         palm_x, palm_y = get_palm_position(landmarks)
 
