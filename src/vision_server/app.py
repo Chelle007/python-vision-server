@@ -4,11 +4,11 @@ import mediapipe as mp
 from vision_server.config import UDP_IP, UDP_PORT
 from vision_server.gestures.dynamic import GestureLSTM
 from vision_server.gestures.hand import HAND_RULES
-from vision_server.gestures.hand.geometry import (
-    get_hand_rotation,
-    get_index_tip_position,
-    get_palm_position,
+from vision_server.gestures.hand.cursor_fields import (
+    apply_right_hand_cursor_fields,
+    reset_last_point,
 )
+from vision_server.gestures.hand.geometry import get_hand_rotation
 from vision_server.gestures.head import HEAD_RULES
 from vision_server.overlay import build_overlay_lines, draw_overlay
 from vision_server.tracking import create_face_mesh, create_hands
@@ -40,6 +40,8 @@ def main():
 
     print(f"Combined Vision Server Running. Sending UDP to {UDP_IP}:{UDP_PORT}")
     print("Press Q in the webcam window to quit.")
+
+    last_point = [-1.0, -1.0]
 
     try:
         while cap.isOpened():
@@ -124,15 +126,9 @@ def main():
                         data["rightIndexUp"] = gestures["index_up"]
                         data["rightPeace"] = gestures["peace"]
 
-                        palm_x, palm_y = get_palm_position(landmarks)
-
-                        data["palmX"] = round(palm_x, 3)
-                        data["palmY"] = round(palm_y, 3)
-
-                        tip_x, tip_y = get_index_tip_position(landmarks)
-
-                        data["indexTipX"] = round(tip_x, 3)
-                        data["indexTipY"] = round(tip_y, 3)
+                        apply_right_hand_cursor_fields(
+                            data, landmarks, gestures, last_point
+                        )
 
                         fist_rot_x, fist_rot_y, fist_rot_z = get_hand_rotation(landmarks)
 
@@ -146,6 +142,7 @@ def main():
                         )
 
             if not right_hand_seen:
+                reset_last_point(last_point)
                 lstm.register_hand_lost()
                 lstm_display = lstm.get_overlay_label()
                 data["lstm_gesture"] = (
