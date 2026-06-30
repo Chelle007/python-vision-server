@@ -34,6 +34,8 @@ def default_payload() -> dict:
         "fistRotZ": 0.0,
         "palmX": -1.0,
         "palmY": -1.0,
+        "indexTipX": -1.0,
+        "indexTipY": -1.0,
         "hands": [],
         "lstm_gesture": "Idle",
     }

@@ -29,6 +29,8 @@ def test_default_payload_has_unity_keys():
         "fistRotZ",
         "palmX",
         "palmY",
+        "indexTipX",
+        "indexTipY",
         "hands",
         "lstm_gesture",
     }
@@ -43,3 +45,7 @@ def test_default_payload_types():
     assert isinstance(data["tilt_right"], bool)
     assert isinstance(data["hands"], list)
     assert isinstance(data["lstm_gesture"], str)
+    assert isinstance(data["indexTipX"], float)
+    assert isinstance(data["indexTipY"], float)
+    assert data["indexTipX"] == -1.0
+    assert data["indexTipY"] == -1.0

@@ -7,6 +7,12 @@ def get_palm_position(landmarks):
     return sum(xs) / 5, sum(ys) / 5
 
 
+def get_index_tip_position(landmarks):
+    """MediaPipe landmark 8 = index fingertip (normalized screen coords)."""
+    tip = landmarks[8]
+    return tip.x, tip.y
+
+
 def get_hand_rotation(landmarks):
     wrist = landmarks[0]
     index_mcp = landmarks[5]
