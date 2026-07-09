@@ -21,6 +21,8 @@ def test_default_payload_has_unity_keys():
         "rightOpenPalm",
         "rightIndexUp",
         "rightPeace",
+        "watchTap",
+        "watchTapDistance",
         "landmarks",
         "openPalm",
         "isFist",

@@ -49,6 +49,14 @@ def build_overlay_lines(data: dict, lstm_display: str) -> list[tuple[str, tuple[
     if data["rightPeace"]:
         overlay_lines.append(("RIGHT PEACE = STAND", (0, 255, 0)))
 
+    if data["watchTap"]:
+        overlay_lines.append(("WATCH TAP", (0, 255, 0)))
+
+    if data["watchTapDistance"] is not None:
+        overlay_lines.append(
+            (f"Watch dist: {data['watchTapDistance']:.2f}", (200, 200, 200))
+        )
+
     if data["tilt_left"]:
         overlay_lines.append(("HEAD TILT LEFT = TURN BACK", (0, 255, 0)))
 

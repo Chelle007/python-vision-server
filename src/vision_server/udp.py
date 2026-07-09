@@ -26,6 +26,8 @@ def default_payload() -> dict:
         "rightOpenPalm": False,
         "rightIndexUp": False,
         "rightPeace": False,
+        "watchTap": False,
+        "watchTapDistance": None,
         "landmarks": [],
         "openPalm": False,
         "isFist": False,

@@ -9,6 +9,7 @@ from vision_server.gestures.hand.cursor_fields import (
     reset_last_point,
 )
 from vision_server.gestures.hand.geometry import get_hand_rotation
+from vision_server.gestures.hand.watch_tap import apply_watch_tap_fields
 from vision_server.gestures.head import HEAD_RULES
 from vision_server.overlay import build_overlay_lines, draw_overlay
 from vision_server.tracking import create_face_mesh, create_hands
@@ -60,6 +61,8 @@ def main():
             data = default_payload()
             right_hand_seen = False
             lstm_display = "Idle"
+            left_landmarks = None
+            right_landmarks = None
 
             if hand_results.multi_hand_landmarks and hand_results.multi_handedness:
                 for hand_landmarks, handedness in zip(
@@ -114,11 +117,13 @@ def main():
                     gestures = evaluate_hand_rules(landmarks)
 
                     if side == "left":
+                        left_landmarks = landmarks
                         data["leftFist"] = gestures["fist"]
                         data["leftOpenPalm"] = gestures["open_palm"]
                         data["leftIndexUp"] = gestures["index_up"]
                         data["leftPeace"] = gestures["peace"]
                     else:
+                        right_landmarks = landmarks
                         right_hand_seen = True
                         lstm.register_hand_seen()
                         data["rightFist"] = gestures["fist"]
@@ -140,6 +145,10 @@ def main():
                         data["lstm_gesture"] = (
                             lstm_display if lstm_display in lstm.classes else "Idle"
                         )
+
+            if apply_watch_tap_fields(data, left_landmarks, right_landmarks):
+                reset_last_point(last_point)
+                lstm_display = "Idle"
 
             if not right_hand_seen:
                 reset_last_point(last_point)
