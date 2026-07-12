@@ -171,6 +171,11 @@ python-vision-server/
 │   ├── run_server.py       # Live tracking + UDP to Unity
 │   ├── record_data.py      # Record training clips
 │   └── train_lstm.py       # Train LSTM from data/
+├── eval/                   # Model evaluation (Layers A/B) — see eval/README.md
+│   ├── run_layer_a.py
+│   ├── run_layer_b.py
+│   ├── measure_jitter.py
+│   └── videos/             # Fixed test videos (you record)
 ├── src/vision_server/
 │   ├── app.py              # Main loop
 │   ├── config.py           # Ports, frame counts, thresholds, paths
@@ -179,6 +184,7 @@ python-vision-server/
 │   ├── overlay.py          # On-screen HUD
 │   ├── recording.py        # Data recorder logic
 │   ├── training.py         # LSTM training logic
+│   ├── evaluation/         # Shared eval metrics (LSTM, jitter, video)
 │   ├── tracking/           # MediaPipe wrappers (hands, face)
 │   └── gestures/
 │       ├── hand/           # Static hand rules (registry-based)
@@ -188,6 +194,15 @@ python-vision-server/
 ├── data/                          # Training data (.npy clips), gitignored
 └── tests/
 ```
+
+### Evaluation (Layers A / B)
+
+```bash
+python eval/run_layer_a.py
+python eval/run_layer_b.py eval/videos/test_video_1.mp4   # after you record videos
+```
+
+See `eval/README.md` and the repo-root `Gesture_Model_Evaluation_Plan.md`.
 
 ---
 

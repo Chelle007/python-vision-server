@@ -1,0 +1,5 @@
+# Annotated Layer B replay exports (per eval version).
+# Example: eval/exports/v1/test_video_1_annotated.mp4
+#
+# Generate with:
+#   python eval/export_annotated_video.py eval/videos/test_video_1.mp4 --version v1

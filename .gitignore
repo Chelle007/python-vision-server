@@ -13,5 +13,15 @@ models/
 *.npy
 *.keras
 
+# Eval benchmark videos (keep folder via .gitkeep)
+eval/videos/*.mp4
+eval/videos/*.mov
+!eval/videos/.gitkeep
+
+# Annotated export videos (keep version folders via .gitkeep)
+eval/exports/**/*.mp4
+eval/exports/**/*.mov
+!eval/exports/**/.gitkeep
+
 # Legacy paths (pre-restructure)
 Dataset/

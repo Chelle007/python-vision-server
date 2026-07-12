@@ -1,0 +1,8 @@
+# Evaluation tooling (Layers A / B)
+#
+# Put fixed benchmark videos here (record once, reuse forever):
+#   test_video_1.mp4  — gesture sequence (incl. Watch Tap + Pull_Lever; not Turn_Key)
+#   test_video_2.mp4  — tracking stress
+#   test_video_3.mp4  — negative / Idle-only (no false Watch Tap / LSTM)
+#
+# See eval/README.md and Gesture_Model_Evaluation_Plan.md for the full script.

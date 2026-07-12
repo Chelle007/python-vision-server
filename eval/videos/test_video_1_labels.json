@@ -1,0 +1,38 @@
+{
+  "video": "test_video_1.mp4",
+  "notes": "Approximate intent windows from script order + visual timeline. Durations are NOT required to be exactly 3s/5s — only that the labeled gesture was intended in that span. Shape sniffing was only used to place boundaries; scoring uses live HAND_RULES / watchTap / LSTM.",
+  "segments": [
+    {"start": 0.0, "end": 7.0, "label": "idle", "seq": 1},
+    {"start": 7.0, "end": 10.0, "label": "leftFist", "seq": 1},
+    {"start": 10.0, "end": 13.0, "label": "leftIndexUp", "seq": 1},
+    {"start": 13.0, "end": 16.5, "label": "leftPeace", "seq": 1},
+    {"start": 17.0, "end": 21.5, "label": "rightFist", "seq": 1},
+    {"start": 21.5, "end": 26.5, "label": "rightOpenPalm", "seq": 1},
+    {"start": 26.5, "end": 34.5, "label": "rightInspect", "seq": 1},
+    {"start": 34.5, "end": 48.0, "label": "idleRandom", "seq": 1},
+    {"start": 48.0, "end": 50.5, "label": "watchTap", "seq": 1},
+    {"start": 51.0, "end": 57.0, "label": "Pull_Lever", "seq": 1},
+
+    {"start": 60.0, "end": 66.5, "label": "idle", "seq": 2},
+    {"start": 66.5, "end": 69.5, "label": "leftFist", "seq": 2},
+    {"start": 69.5, "end": 73.0, "label": "leftIndexUp", "seq": 2},
+    {"start": 73.0, "end": 77.0, "label": "leftPeace", "seq": 2},
+    {"start": 77.5, "end": 81.0, "label": "rightFist", "seq": 2},
+    {"start": 81.0, "end": 84.5, "label": "rightOpenPalm", "seq": 2},
+    {"start": 84.5, "end": 92.5, "label": "rightInspect", "seq": 2},
+    {"start": 92.5, "end": 104.0, "label": "idleRandom", "seq": 2},
+    {"start": 104.0, "end": 108.5, "label": "watchTap", "seq": 2},
+    {"start": 110.0, "end": 116.5, "label": "Pull_Lever", "seq": 2},
+
+    {"start": 120.0, "end": 126.0, "label": "idle", "seq": 3},
+    {"start": 126.0, "end": 130.0, "label": "leftFist", "seq": 3},
+    {"start": 130.0, "end": 133.5, "label": "leftIndexUp", "seq": 3},
+    {"start": 133.5, "end": 137.0, "label": "leftPeace", "seq": 3},
+    {"start": 137.5, "end": 142.0, "label": "rightFist", "seq": 3},
+    {"start": 142.0, "end": 146.0, "label": "rightOpenPalm", "seq": 3},
+    {"start": 146.0, "end": 155.0, "label": "rightInspect", "seq": 3},
+    {"start": 155.0, "end": 171.5, "label": "idleRandom", "seq": 3},
+    {"start": 171.5, "end": 173.0, "label": "watchTap", "seq": 3},
+    {"start": 173.5, "end": 178.5, "label": "Pull_Lever", "seq": 3}
+  ]
+}
