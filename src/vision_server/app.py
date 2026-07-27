@@ -1,7 +1,7 @@
 import cv2
 import mediapipe as mp
 
-from vision_server.config import UDP_IP, UDP_PORT
+from vision_server.config import MAX_NUM_FACES, MAX_NUM_HANDS, UDP_IP, UDP_PORT
 from vision_server.gestures.dynamic import GestureLSTM
 from vision_server.gestures.hand import HAND_RULES
 from vision_server.gestures.hand.cursor_fields import (
@@ -11,8 +11,14 @@ from vision_server.gestures.hand.cursor_fields import (
 from vision_server.gestures.hand.geometry import get_hand_rotation
 from vision_server.gestures.hand.watch_tap import apply_watch_tap_fields
 from vision_server.gestures.head import HEAD_RULES
-from vision_server.overlay import build_overlay_lines, draw_overlay
-from vision_server.tracking import create_face_mesh, create_hands
+from vision_server.overlay import build_overlay_lines, draw_lock_ring, draw_overlay
+from vision_server.tracking import (
+    PlayerLock,
+    collect_faces,
+    collect_hands,
+    create_face_mesh,
+    create_hands,
+)
 from vision_server.udp import create_udp_socket, default_payload, send_payload
 
 
@@ -27,20 +33,41 @@ def apply_head_rules(face_landmarks, data: dict) -> None:
             data.update(result)
 
 
+def _landmark_dicts(landmarks) -> list[dict]:
+    return [
+        {"x": round(lm.x, 4), "y": round(lm.y, 4), "z": round(lm.z, 4)}
+        for lm in landmarks
+    ]
+
+
+def _append_hand_packet(data: dict, hand) -> None:
+    world = []
+    if hand.world_landmarks is not None:
+        world = _landmark_dicts(hand.world_landmarks.landmark)
+    data["hands"].append(
+        {
+            "handedness": hand.handedness,
+            "landmarks": _landmark_dicts(hand.landmarks),
+            "world_landmarks": world,
+        }
+    )
+
+
 def main():
     sock = create_udp_socket()
 
     mp_hands = mp.solutions.hands
     mp_draw = mp.solutions.drawing_utils
 
-    hands = create_hands(max_num_hands=2)
-    face_mesh = create_face_mesh(max_num_faces=1)
+    hands = create_hands(max_num_hands=MAX_NUM_HANDS)
+    face_mesh = create_face_mesh(max_num_faces=MAX_NUM_FACES)
     lstm = GestureLSTM()
+    player_lock = PlayerLock()
 
     cap = cv2.VideoCapture(0)
 
     print(f"Combined Vision Server Running. Sending UDP to {UDP_IP}:{UDP_PORT}")
-    print("Press Q in the webcam window to quit.")
+    print("Press Q to quit.")
 
     last_point = [-1.0, -1.0]
 
@@ -58,93 +85,68 @@ def main():
             hand_results = hands.process(rgb)
             face_results = face_mesh.process(rgb)
 
+            lock = player_lock.update(
+                collect_faces(face_results),
+                collect_hands(hand_results),
+            )
+
             data = default_payload()
+            data["player_locked"] = lock.locked
+            data["lock_id"] = lock.lock_id
+            data["lock_status"] = lock.status
+
+            if lock.flush_lstm:
+                lstm.flush()
+                reset_last_point(last_point)
+
             right_hand_seen = False
             lstm_display = "Idle"
             left_landmarks = None
             right_landmarks = None
 
-            if hand_results.multi_hand_landmarks and hand_results.multi_handedness:
-                for hand_landmarks, handedness in zip(
-                    hand_results.multi_hand_landmarks,
-                    hand_results.multi_handedness,
-                ):
-                    landmarks = hand_landmarks.landmark
+            if lock.left is not None:
+                left = lock.left
+                left_landmarks = left.landmarks
+                _append_hand_packet(data, left)
+                mp_draw.draw_landmarks(
+                    frame, left.mp_landmarks, mp_hands.HAND_CONNECTIONS
+                )
+                gestures = evaluate_hand_rules(left_landmarks)
+                data["leftFist"] = gestures["fist"]
+                data["leftOpenPalm"] = gestures["open_palm"]
+                data["leftIndexUp"] = gestures["index_up"]
+                data["leftPeace"] = gestures["peace"]
 
-                    hand_label = handedness.classification[0].label
-                    side = hand_label.lower()
+            if lock.right is not None:
+                right = lock.right
+                right_landmarks = right.landmarks
+                right_hand_seen = True
+                _append_hand_packet(data, right)
+                mp_draw.draw_landmarks(
+                    frame, right.mp_landmarks, mp_hands.HAND_CONNECTIONS
+                )
+                gestures = evaluate_hand_rules(right_landmarks)
+                lstm.register_hand_seen()
+                data["rightFist"] = gestures["fist"]
+                data["rightOpenPalm"] = gestures["open_palm"]
+                data["rightIndexUp"] = gestures["index_up"]
+                data["rightPeace"] = gestures["peace"]
 
-                    landmark_list = [
-                        {
-                            "x": round(lm.x, 4),
-                            "y": round(lm.y, 4),
-                            "z": round(lm.z, 4),
-                        }
-                        for lm in landmarks
-                    ]
+                apply_right_hand_cursor_fields(
+                    data, right_landmarks, gestures, last_point
+                )
 
-                    world_landmark_list = []
+                fist_rot_x, fist_rot_y, fist_rot_z = get_hand_rotation(
+                    right_landmarks
+                )
+                data["fistRotX"] = round(fist_rot_x, 3)
+                data["fistRotY"] = round(fist_rot_y, 3)
+                data["fistRotZ"] = round(fist_rot_z, 3)
 
-                    if hand_results.multi_hand_world_landmarks:
-                        hand_index = len(data["hands"])
-
-                        if hand_index < len(hand_results.multi_hand_world_landmarks):
-                            world_landmark_list = [
-                                {
-                                    "x": round(lm.x, 4),
-                                    "y": round(lm.y, 4),
-                                    "z": round(lm.z, 4),
-                                }
-                                for lm in hand_results.multi_hand_world_landmarks[
-                                    hand_index
-                                ].landmark
-                            ]
-
-                    data["hands"].append(
-                        {
-                            "handedness": hand_label,
-                            "landmarks": landmark_list,
-                            "world_landmarks": world_landmark_list,
-                        }
-                    )
-
-                    mp_draw.draw_landmarks(
-                        frame,
-                        hand_landmarks,
-                        mp_hands.HAND_CONNECTIONS,
-                    )
-
-                    gestures = evaluate_hand_rules(landmarks)
-
-                    if side == "left":
-                        left_landmarks = landmarks
-                        data["leftFist"] = gestures["fist"]
-                        data["leftOpenPalm"] = gestures["open_palm"]
-                        data["leftIndexUp"] = gestures["index_up"]
-                        data["leftPeace"] = gestures["peace"]
-                    else:
-                        right_landmarks = landmarks
-                        right_hand_seen = True
-                        lstm.register_hand_seen()
-                        data["rightFist"] = gestures["fist"]
-                        data["rightOpenPalm"] = gestures["open_palm"]
-                        data["rightIndexUp"] = gestures["index_up"]
-                        data["rightPeace"] = gestures["peace"]
-
-                        apply_right_hand_cursor_fields(
-                            data, landmarks, gestures, last_point
-                        )
-
-                        fist_rot_x, fist_rot_y, fist_rot_z = get_hand_rotation(landmarks)
-
-                        data["fistRotX"] = round(fist_rot_x, 3)
-                        data["fistRotY"] = round(fist_rot_y, 3)
-                        data["fistRotZ"] = round(fist_rot_z, 3)
-
-                        lstm_display = lstm.predict(landmarks)
-                        data["lstm_gesture"] = (
-                            lstm_display if lstm_display in lstm.classes else "Idle"
-                        )
+                lstm_display = lstm.predict(right_landmarks)
+                data["lstm_gesture"] = (
+                    lstm_display if lstm_display in lstm.classes else "Idle"
+                )
 
             if apply_watch_tap_fields(data, left_landmarks, right_landmarks):
                 reset_last_point(last_point)
@@ -158,11 +160,18 @@ def main():
                     lstm_display if lstm_display in lstm.classes else "Idle"
                 )
 
-            if face_results.multi_face_landmarks:
-                apply_head_rules(face_results.multi_face_landmarks[0], data)
+            if lock.face is not None:
+                apply_head_rules(lock.face, data)
 
             overlay_lines = build_overlay_lines(data, lstm_display)
             draw_overlay(frame, overlay_lines)
+            draw_lock_ring(
+                frame,
+                status=lock.status,
+                center=lock.ring_center,
+                ring_size=lock.ring_size,
+                progress=lock.progress,
+            )
             send_payload(sock, data)
 
             cv2.imshow("Combined Hand + Face Tracker", frame)

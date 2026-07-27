@@ -51,11 +51,15 @@ class GestureLSTM:
     def register_hand_seen(self):
         self.hand_miss_streak = 0
 
+    def flush(self):
+        self.frame_buffer.clear()
+        self.hand_miss_streak = 0
+        self.last_output = "Idle"
+
     def register_hand_lost(self):
         self.hand_miss_streak += 1
         if self.hand_miss_streak >= self.clear_after_misses:
-            self.frame_buffer.clear()
-            self.last_output = "Idle"
+            self.flush()
 
     def get_overlay_label(self):
         """Label for on-screen HUD (may include warmup progress)."""

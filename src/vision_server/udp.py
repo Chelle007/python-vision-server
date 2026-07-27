@@ -40,6 +40,9 @@ def default_payload() -> dict:
         "indexTipY": -1.0,
         "hands": [],
         "lstm_gesture": "Idle",
+        "player_locked": False,
+        "lock_id": 0,
+        "lock_status": "unlocked",
     }
 
 

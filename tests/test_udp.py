@@ -35,6 +35,9 @@ def test_default_payload_has_unity_keys():
         "indexTipY",
         "hands",
         "lstm_gesture",
+        "player_locked",
+        "lock_id",
+        "lock_status",
     }
     assert set(data.keys()) == expected_keys
 
@@ -51,3 +54,6 @@ def test_default_payload_types():
     assert isinstance(data["indexTipY"], float)
     assert data["indexTipX"] == -1.0
     assert data["indexTipY"] == -1.0
+    assert data["player_locked"] is False
+    assert data["lock_id"] == 0
+    assert data["lock_status"] == "unlocked"

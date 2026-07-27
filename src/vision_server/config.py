@@ -16,6 +16,22 @@ DATA_DIR = "data"
 MEDIAPIPE_MIN_DETECTION_CONFIDENCE = 0.7
 MEDIAPIPE_MIN_TRACKING_CONFIDENCE = 0.7
 
+MAX_NUM_FACES = 2
+MAX_NUM_HANDS = 4
+
+# Player lock (distances in face-widths; timeouts in wall-clock seconds)
+SEAT_RADIUS = 1.5
+SEAT_EMPTY_S = 3.0
+CHALLENGER_HOLD_S = 1.0
+LOCK_CONFIRM_S = 0.33
+FACE_MATCH_GATE = 2.0
+HAND_MATCH_GATE = 2.5
+# Image-space arm span is large vs face width — keep this loose for solo play.
+HAND_TO_FACE_REACH = 8.0
+CHALLENGER_MIN_FACE_WIDTH = 0.08
+CHALLENGER_MAX_CENTER_DIST = 0.35
+CHALLENGER_SIZE_REF = 0.22
+
 HEAD_TILT_THRESHOLD = 0.6
 
 TRAIN_EPOCHS = 60
