@@ -13,6 +13,10 @@ from vision_server.config import (
     CHALLENGER_SIZE_REF,
     FACE_MATCH_GATE,
     HAND_MATCH_GATE,
+    HAND_RESEED_GATE,
+    HAND_RESEED_S,
+    HAND_SIZE_REF_RATIO,
+    HAND_SIZE_SCORE_WEIGHT,
     HAND_TO_FACE_REACH,
     LOCK_CONFIRM_S,
     SEAT_EMPTY_S,
@@ -145,6 +149,10 @@ class PlayerLock:
         self._face_height = 0.1
         self._left_center: tuple[float, float] | None = None
         self._right_center: tuple[float, float] | None = None
+        self._left_length: float | None = None
+        self._right_length: float | None = None
+        self._left_missing_since: float | None = None
+        self._right_missing_since: float | None = None
         self._seat_center: tuple[float, float] | None = None
         self._seat_width = 0.1
         self._seat_empty_since: float | None = None
@@ -175,7 +183,7 @@ class PlayerLock:
                 self._challenger = None
                 self._challenger_since = None
                 self._set_face(tracked)
-                left, right, flush = self._match_hands(hands)
+                left, right, flush = self._match_hands(hands, now)
                 return LockResult(
                     locked=True,
                     lock_id=self.lock_id,
@@ -197,7 +205,7 @@ class PlayerLock:
         if challenger is not None:
             return self._takeover(challenger, hands)
 
-        left, right, flush = self._match_hands(hands)
+        left, right, flush = self._match_hands(hands, now)
         progress = 0.0
         status = "locked"
         ring = self._seat_center
@@ -277,7 +285,7 @@ class PlayerLock:
         self._challenger = None
         self._challenger_since = None
         self._set_face(face)
-        left, right, flush = self._match_hands(hands)
+        left, right, flush = self._match_hands(hands, now)
         return LockResult(
             locked=True,
             lock_id=self.lock_id,
@@ -357,15 +365,13 @@ class PlayerLock:
     ) -> LockResult:
         self.lock_id += 1
         self.locked = True
-        self._left_center = None
-        self._right_center = None
+        self._reset_hand_tracks()
         self._seat_empty_since = None
         self._challenger = None
         self._challenger_since = None
         self._set_face(face)
         left, right = self._seed_hands(hands)
-        self._left_center = left.center if left else None
-        self._right_center = right.center if right else None
+        self._commit_seeded_hands(left, right)
         _log(f"challenger takeover id={self.lock_id}")
         return LockResult(
             locked=True,
@@ -467,8 +473,7 @@ class PlayerLock:
         self._cold_since = None
         self._set_face(best)
         left, right = self._seed_hands(hands)
-        self._left_center = left.center if left else None
-        self._right_center = right.center if right else None
+        self._commit_seeded_hands(left, right)
         _log(f"acquired id={self.lock_id}")
         return LockResult(
             locked=True,
@@ -493,109 +498,204 @@ class PlayerLock:
             return False
         return True
 
+    def _reset_hand_tracks(self) -> None:
+        self._left_center = None
+        self._right_center = None
+        self._left_length = None
+        self._right_length = None
+        self._left_missing_since = None
+        self._right_missing_since = None
+
+    def _commit_seeded_hands(
+        self,
+        left: HandCandidate | None,
+        right: HandCandidate | None,
+    ) -> None:
+        self._left_center = left.center if left else None
+        self._right_center = right.center if right else None
+        self._left_length = left.length if left else None
+        self._right_length = right.length if right else None
+        self._left_missing_since = None
+        self._right_missing_since = None
+
+    def _expected_hand_length(self) -> float:
+        return max(self._face_height * HAND_SIZE_REF_RATIO, 1e-6)
+
     def _seed_hands(
         self, hands: list[HandCandidate]
     ) -> tuple[HandCandidate | None, HandCandidate | None]:
         ok = [h for h in hands if self._hand_ok(h)]
-        ok.sort(
-            key=lambda h: _dist(h.center, self._face_center or (0.5, 0.5))
+        face = self._face_center or (0.5, 0.5)
+        scale = max(self._face_width, 1e-6)
+        expected = self._expected_hand_length()
+        left = self._pick_side(
+            ok, face, scale, "left", gate=None, preferred_length=expected
         )
-        left = right = None
-        for hand in ok[:2]:
-            label = hand.handedness.lower()
-            if label == "left" and left is None:
-                left = hand
-            elif label == "right" and right is None:
-                right = hand
-            elif left is None:
-                left = hand
-            elif right is None:
-                right = hand
+        right = self._pick_side(
+            ok, face, scale, "right", gate=None, preferred_length=expected
+        )
         return left, right
 
     def _match_hands(
-        self, hands: list[HandCandidate]
+        self, hands: list[HandCandidate], now: float
     ) -> tuple[HandCandidate | None, HandCandidate | None, bool]:
         ok = [h for h in hands if self._hand_ok(h)]
+        face = self._face_center or (0.5, 0.5)
         scale = max(self._face_width, 1e-6)
+        expected = self._expected_hand_length()
         flush = False
 
         if self._left_center is None and self._right_center is None:
-            return self._seed_hands(ok) + (False,)
+            left, right = self._seed_hands(hands)
+            self._commit_seeded_hands(left, right)
+            return left, right, False
 
         left = right = None
 
-        if (
-            len(ok) >= 2
-            and self._left_center is not None
-            and self._right_center is not None
-        ):
-            best_pair = None
-            best_cost = float("inf")
-            for i, a in enumerate(ok):
-                for j, b in enumerate(ok):
-                    if i == j:
-                        continue
-                    cost = (
-                        _dist(a.center, self._left_center) / scale
-                        + _dist(b.center, self._right_center) / scale
-                    )
-                    if cost < best_cost:
-                        best_cost = cost
-                        best_pair = (a, b)
-            if best_pair is not None:
-                cand_l, cand_r = best_pair
-                if (
-                    _dist(cand_l.center, self._left_center) / scale
-                    <= HAND_MATCH_GATE
-                    and _dist(cand_r.center, self._right_center) / scale
-                    <= HAND_MATCH_GATE
-                ):
-                    left, right = cand_l, cand_r
-
-        if left is None and self._left_center is not None:
-            left = self._nearest(ok, self._left_center, scale)
-        if right is None and self._right_center is not None:
-            right = self._nearest(
-                [h for h in ok if h is not left],
+        if self._left_center is not None:
+            left = self._pick_side(
+                ok,
+                self._left_center,
+                scale,
+                "left",
+                gate=HAND_MATCH_GATE,
+                preferred_length=self._left_length or expected,
+            )
+        if self._right_center is not None:
+            right = self._pick_side(
+                ok,
                 self._right_center,
                 scale,
+                "right",
+                gate=HAND_MATCH_GATE,
+                preferred_length=self._right_length or expected,
             )
 
-        leftovers = [h for h in ok if h is not left and h is not right]
-        if left is None and leftovers:
-            left = leftovers.pop(0)
-            flush = True
-            _log("left hand reseed")
-        if right is None and leftovers:
-            right = leftovers.pop(0)
-            flush = True
-            _log("right hand reseed")
+        if self._left_center is not None:
+            left, flush_l = self._hold_or_reseed_side(
+                side="left",
+                matched=left,
+                candidates=ok,
+                scale=scale,
+                now=now,
+            )
+            flush = flush or flush_l
+        if self._right_center is not None:
+            right, flush_r = self._hold_or_reseed_side(
+                side="right",
+                matched=right,
+                candidates=ok,
+                scale=scale,
+                now=now,
+            )
+            flush = flush or flush_r
 
-        if left is None and self._left_center is not None:
-            flush = True
-        if right is None and self._right_center is not None:
-            flush = True
+        # Empty / abandoned sides: soft-acquire near the locked face.
+        if self._left_center is None and left is None:
+            left = self._pick_side(
+                ok, face, scale, "left", gate=None, preferred_length=expected
+            )
+        if self._right_center is None and right is None:
+            right = self._pick_side(
+                ok, face, scale, "right", gate=None, preferred_length=expected
+            )
 
         if left is not None:
             self._left_center = left.center
+            self._left_length = left.length
+            self._left_missing_since = None
         if right is not None:
             self._right_center = right.center
+            self._right_length = right.length
+            self._right_missing_since = None
+
         return left, right, flush
 
+    def _clear_side_track(self, side: str) -> None:
+        if side == "left":
+            self._left_center = None
+            self._left_length = None
+            self._left_missing_since = None
+        else:
+            self._right_center = None
+            self._right_length = None
+            self._right_missing_since = None
+
+    def _hold_or_reseed_side(
+        self,
+        *,
+        side: str,
+        matched: HandCandidate | None,
+        candidates: list[HandCandidate],
+        scale: float,
+        now: float,
+    ) -> tuple[HandCandidate | None, bool]:
+        if side == "left":
+            track = self._left_center
+            missing_attr = "_left_missing_since"
+            preferred = self._left_length or self._expected_hand_length()
+        else:
+            track = self._right_center
+            missing_attr = "_right_missing_since"
+            preferred = self._right_length or self._expected_hand_length()
+
+        if track is None:
+            return matched, False
+
+        if matched is not None:
+            setattr(self, missing_attr, None)
+            return matched, False
+
+        missing_since = getattr(self, missing_attr)
+        if missing_since is None:
+            setattr(self, missing_attr, now)
+            return None, False
+
+        if now - missing_since < HAND_RESEED_S:
+            # Hold last position; do not steal a hand nearer the face.
+            return None, False
+
+        # Reseed only near the previous hand location — never "nearest to face".
+        reseed = self._pick_side(
+            candidates,
+            track,
+            scale,
+            side,
+            gate=HAND_RESEED_GATE,
+            preferred_length=preferred,
+        )
+        if reseed is not None:
+            _log(f"{side} hand reseed near previous")
+            return reseed, True
+
+        # Bystander left / wrong lock: drop stale track so face-near
+        # soft-acquire can pick up the locked player's hands.
+        _log(f"{side} hand track abandoned")
+        self._clear_side_track(side)
+        return None, True
+
     @staticmethod
-    def _nearest(
+    def _pick_side(
         hands: list[HandCandidate],
         target: tuple[float, float],
         scale: float,
+        side: str,
+        *,
+        gate: float | None,
+        preferred_length: float | None,
     ) -> HandCandidate | None:
+        pool = [h for h in hands if h.handedness.lower() == side]
         best = None
-        best_cost = float("inf")
-        for hand in hands:
-            cost = _dist(hand.center, target) / scale
-            if cost < best_cost:
-                best_cost = cost
+        best_score = float("inf")
+        for hand in pool:
+            dist_cost = _dist(hand.center, target) / scale
+            if gate is not None and dist_cost > gate:
+                continue
+            size_cost = 0.0
+            if preferred_length is not None and preferred_length > 0:
+                size_cost = abs(hand.length - preferred_length) / preferred_length
+            score = dist_cost + HAND_SIZE_SCORE_WEIGHT * size_cost
+            if score < best_score:
+                best_score = score
                 best = hand
-        if best is None or best_cost > HAND_MATCH_GATE:
-            return None
         return best

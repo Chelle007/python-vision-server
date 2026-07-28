@@ -152,9 +152,83 @@ def test_challenger_takeover_after_seat_empty():
     assert taken.flush_lstm is True
 
 
+def test_two_right_hands_keeps_one_right_only():
+    lock = PlayerLock()
+    face = _face(0.5, 0.4, width=0.2, height=0.25)
+    player_right = _hand(0.62, 0.55, length=0.12, handedness="Right")
+    friend_right = _hand(0.78, 0.60, length=0.12, handedness="Right")
+    lock.update([face], [], now=0.0)
+    result = lock.update([face], [player_right, friend_right], now=0.4)
+    assert result.locked is True
+    assert result.left is None
+    assert result.right is not None
+    assert result.right.handedness.lower() == "right"
+    # Prefer the right hand nearer the locked face.
+    assert abs(result.right.center[0] - 0.62) < 1e-6
+
+
 def test_tiny_background_face_not_eligible():
     lock = PlayerLock()
     tiny = _face(0.5, 0.45, width=0.03)
     result = lock.update([tiny], [], now=0.0)
     assert result.locked is False
     assert result.status == "unlocked"
+
+
+def test_tracked_hand_not_stolen_by_friend_nearer_face():
+    """Once a side is tracked, stick to previous position — not nearest-to-face."""
+    lock = PlayerLock()
+    face = _face(0.5, 0.4, width=0.2, height=0.25)
+    player_right = _hand(0.72, 0.65, length=0.12, handedness="Right")
+    lock.update([face], [], now=0.0)
+    acquired = lock.update([face], [player_right], now=0.4)
+    assert acquired.right is not None
+    assert abs(acquired.right.center[0] - 0.72) < 1e-6
+
+    # Friend's right is closer to the face but farther from the tracked hand.
+    friend_right = _hand(0.55, 0.48, length=0.12, handedness="Right")
+    stuck = lock.update(
+        [face], [player_right, friend_right], now=0.5
+    )
+    assert stuck.right is not None
+    assert abs(stuck.right.center[0] - 0.72) < 1e-6
+
+
+def test_brief_hand_miss_does_not_reseed_to_friend_near_face():
+    lock = PlayerLock()
+    face = _face(0.5, 0.4, width=0.2, height=0.25)
+    player_right = _hand(0.72, 0.65, length=0.12, handedness="Right")
+    lock.update([face], [], now=0.0)
+    lock.update([face], [player_right], now=0.4)
+
+    friend_right = _hand(0.55, 0.48, length=0.12, handedness="Right")
+    # Player hand gone briefly; friend nearer face must not take the slot.
+    missed = lock.update([face], [friend_right], now=0.5)
+    assert missed.right is None
+    assert abs(lock._right_center[0] - 0.72) < 1e-6
+
+    # Still within reseed hold window.
+    still = lock.update([face], [friend_right], now=0.7)
+    assert still.right is None
+
+
+def test_abandons_stale_hand_track_and_recovers_near_face():
+    """Wrong lock to a far bystander hand must recover after they leave."""
+    lock = PlayerLock()
+    face = _face(0.5, 0.4, width=0.2, height=0.25)
+    friend_right = _hand(0.92, 0.88, length=0.12, handedness="Right")
+    player_right = _hand(0.55, 0.50, length=0.12, handedness="Right")
+
+    lock.update([face], [], now=0.0)
+    wrong = lock.update([face], [friend_right], now=0.4)
+    assert wrong.right is not None
+    assert abs(wrong.right.center[0] - 0.92) < 1e-6
+
+    # Friend gone; player hand is near face but far from the stale track.
+    held = lock.update([face], [player_right], now=0.5)
+    assert held.right is None
+
+    recovered = lock.update([face], [player_right], now=1.0)
+    assert recovered.right is not None
+    assert abs(recovered.right.center[0] - 0.55) < 1e-6
+    assert recovered.flush_lstm is True

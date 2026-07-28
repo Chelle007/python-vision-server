@@ -25,7 +25,13 @@ SEAT_EMPTY_S = 3.0
 CHALLENGER_HOLD_S = 1.0
 LOCK_CONFIRM_S = 0.33
 FACE_MATCH_GATE = 2.0
-HAND_MATCH_GATE = 2.5
+# Tight frame-to-frame stick; wider reseed only after HAND_RESEED_S.
+HAND_MATCH_GATE = 1.0
+HAND_RESEED_S = 0.45
+HAND_RESEED_GATE = 2.5
+# Soft size preference vs face height (tie-break only, not a hard reject).
+HAND_SIZE_REF_RATIO = 0.55
+HAND_SIZE_SCORE_WEIGHT = 0.2
 # Image-space arm span is large vs face width — keep this loose for solo play.
 HAND_TO_FACE_REACH = 8.0
 CHALLENGER_MIN_FACE_WIDTH = 0.08
