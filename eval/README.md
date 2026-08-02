@@ -143,10 +143,11 @@ python eval/run_layer_b.py eval/videos/test_video_1.mp4
 python eval/run_layer_b.py eval/videos/test_video_1.mp4 --no-jitter   # faster re-run
 python eval/run_layer_b.py eval/videos/test_video_1.mp4 --labels path/to.json
 python eval/run_layer_b.py eval/videos/test_video_1.mp4 --no-labels
+python eval/run_layer_b.py eval/videos/test_video_1.mp4 --no-player-lock  # v1-proxy pipeline
 python eval/measure_jitter.py eval/videos/test_video_1.mp4
 ```
 
-Default: selfie-flip on (matches live server). Use `--no-mirror` only if diagnosing flip issues.
+Default: selfie-flip on + **PlayerLock on** (matches live `app.py`). Use `--no-mirror` only if diagnosing flip issues. Use `--no-player-lock` for the pre-lock 2-hand path (v1 latency proxy on current HEAD).
 
 ### What is automated
 
@@ -155,12 +156,20 @@ Default: selfie-flip on (matches live server). Use `--no-mirror` only if diagnos
 | Detection rate | ✅ | |
 | Recovery frames | ✅ | |
 | Jitter score | ✅ (unless `--no-jitter`) | |
+| Proc latency mean / p95 (ms) | ✅ (main pass) | |
 | LSTM histogram / transitions | ✅ | |
 | Static gesture acc (fist/index/peace/open) | | ✅ |
 | Watch Tap acc | | ✅ (counted in “static incl. Watch Tap”) |
 | L/R assignment | | ✅ |
 | Pull_Lever segment acc (`LSTM Acc (video)`) | | ✅ |
 | Idle / idleRandom false-trigger rate | | ✅ |
+
+**Proc latency** = vision-server ms/frame (mirror → MediaPipe → optional PlayerLock → LSTM as applicable). It is **not** Unity glass-to-glass latency (that stays Layer C). Lower is better; soft bar **mean ≤ ~33 ms** (30 fps budget). Measured in the main metrics pass — use `--no-jitter --no-labels` when you only need latency.
+
+**v1 vs v2 latency on HEAD:** do not git-checkout the old commit for this column (eval timing + lock live on current code). Run twice on `test_video_1.mp4`:
+
+- `--no-player-lock` → fill **v1** proc cells (pre-lock pipeline proxy)
+- default (lock on) → fill **v2** proc cells (face + hands + PlayerLock, live path)
 
 **False positives in plan sense** = Watch Tap + LSTM actions (`Pull_Lever` / `Turn_Key`), **not** fist/open-palm lighting up during waving.
 
@@ -202,6 +211,7 @@ python eval/export_annotated_video.py eval/videos/test_video_1.mp4 --version v1
 | LSTM per class on video (e.g. Pull_Lever) | ≥ 85% |
 | Recovery | &lt; ~30 frames @ 60fps (use measured FPS context) |
 | Jitter | **Lower than previous baseline** (no absolute cutoff) |
+| Proc latency (mean) | Soft bar ≤ ~33 ms (vision-server only; lower is better) |
 | False trigger | As low as possible |
 
 ---
@@ -249,7 +259,7 @@ File: `FYP Repo/Gesture_Model_Evaluation_Log.xlsx`
 - **PASS** = green fill; **FAIL** = red fill.
 - Comparison Log metric colors vs targets:
   - Higher-is-better green if meet/exceed: A Acc ≥85%, B Det ≥90%, B LSTM ≥85%, C Success ≥85%.
-  - Lower-is-better green if ≤ soft bar: A/C FP ≤10%.
+  - Lower-is-better green if ≤ soft bar: A/C FP ≤10%; B Proc ms (mean) ≤33 ms.
   - B Jitter: leave uncolored (relative to baseline only).
 - Versioning: `v1` = first baseline; bump `v2`, … when logging a new Full Run after a meaningful change.
 - Exports folder version should match Excel version (`eval/exports/v2/` for v2).
@@ -263,7 +273,7 @@ Scripts print lines like:
 overall=… Idle=… Turn_Key=… Pull_Lever=… FP_Idle_to_action=…
 
 --- Spreadsheet paste (Layer B auto) ---
-detection=… recovery_frames=… jitter=…
+detection=… recovery_frames=… jitter=… proc_ms_mean=… proc_ms_p95=… player_lock=on|off
 
 --- Spreadsheet paste (Layer B labels) ---
 lr=… static_incl_watchTap=… lstm_Pull_Lever=… false_trigger=…

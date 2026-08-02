@@ -5,6 +5,7 @@ Usage (from python-vision-server/):
   python eval/run_layer_b.py eval/videos/test_video_1.mp4
   python eval/run_layer_b.py eval/videos/test_video_1.mp4 --no-lstm
   python eval/run_layer_b.py eval/videos/test_video_1.mp4 --labels eval/videos/test_video_1_labels.json
+  python eval/run_layer_b.py eval/videos/test_video_1.mp4 --no-player-lock
 """
 
 from __future__ import annotations
@@ -37,6 +38,11 @@ def main() -> None:
         help="Do not selfie-flip frames (default matches live server)",
     )
     parser.add_argument(
+        "--no-player-lock",
+        action="store_true",
+        help="Disable PlayerLock (v1-equivalent 2-hand path; default matches live)",
+    )
+    parser.add_argument(
         "--labels",
         default=None,
         help="Segment labels JSON (default: <video_stem>_labels.json if present)",
@@ -54,6 +60,7 @@ def main() -> None:
         run_jitter=not args.no_jitter,
         model_path=args.model,
         mirror=not args.no_mirror,
+        player_lock=not args.no_player_lock,
     )
     print()
     print(result.format_report())
@@ -68,10 +75,23 @@ def main() -> None:
         if result.jitter_score == result.jitter_score
         else "n/a"
     )
+    mean_ms = (
+        f"{result.mean_proc_ms:.2f}"
+        if result.mean_proc_ms == result.mean_proc_ms
+        else "n/a"
+    )
+    p95_ms = (
+        f"{result.p95_proc_ms:.2f}"
+        if result.p95_proc_ms == result.p95_proc_ms
+        else "n/a"
+    )
     print(
         f"detection={result.detection_rate:.4f}  "
         f"recovery_frames={recovery}  "
-        f"jitter={jitter}"
+        f"jitter={jitter}  "
+        f"proc_ms_mean={mean_ms}  "
+        f"proc_ms_p95={p95_ms}  "
+        f"player_lock={'on' if result.player_lock else 'off'}"
     )
 
     labels_path = None
