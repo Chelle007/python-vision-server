@@ -82,6 +82,8 @@ python scripts/run_server.py
 | `RIGHT FIST = GRAB`          | Right-hand grab detected                    |
 | `HEAD TILT LEFT = TURN` | Head rolled left — hold to turn body (Unity) |
 | `HEAD TILT RIGHT = TURN`| Head rolled right — hold to turn body (Unity) |
+| `HEAD TILT LEFT/RIGHT = TURN BACK` | Look-up + exclusive tilt → snap body 180° |
+| `CALIBRATING` / `CALIBRATED` | Pitch neutral auto-cal after player lock (C to redo) |
 | `AI LSTM: Turn_Around_CW` | Clockwise circle (detected; reserved for puzzles) |
 | `AI LSTM: Turn_Around_CCW`| Counter-clockwise circle (detected; reserved for puzzles) |
 | `AI LSTM: Turn_Key`     | Dynamic puzzle gesture detected             |
@@ -226,8 +228,9 @@ Key fields teammates may use:
 
 | Field                                  | Type   | Description                            |
 | -------------------------------------- | ------ | -------------------------------------- |
-| `head_yaw`, `head_pitch`               | float  | Head orientation (−1 to 1)             |
-| `tilt_left`, `tilt_right`              | bool   | Head roll L/R; Unity hold-to-turn (not snap) |
+| `head_yaw`, `head_pitch`               | float  | Orientation (−1…1); pitch is rest-relative after cal (neg = look up) |
+| `head_pitch_raw`, `pitch_calibrated`, `pitch_cal_status`, `pitch_cal_neutral` | debug | Raw pitch + cal state (Unity can ignore) |
+| `tilt_left`, `tilt_right`              | bool   | Head roll L/R; hold-to-turn, or snap 180° if looking up |
 | `leftFist`, `leftIndexUp`, `leftPeace` | bool   | Left-hand movement                     |
 | `rightFist`, `rightOpenPalm`           | bool   | Right-hand interaction                 |
 | `rightIndexUp`                         | bool   | Right-hand index up (e.g. stand from sit) |

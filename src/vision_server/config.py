@@ -43,6 +43,16 @@ CHALLENGER_MAX_CENTER_DIST = 0.35
 CHALLENGER_SIZE_REF = 0.22
 
 HEAD_TILT_THRESHOLD = 0.5
+# Look-up on *calibrated* pitch: head_pitch <= -this (negative = look up).
+# Applied AFTER pitch_neutral subtraction so rest ≈ 0.
+HEAD_LOOK_UP_PITCH_THRESHOLD = 0.15
+# Auto-calibrate pitch neutral after player lock.
+PITCH_CAL_SAMPLE_S = 1.5
+# Soft stability hint only (std above this shows hold still); completion still
+# finishes after SAMPLE_S using the sample median — live face noise is often
+# 0.04–0.08 and used to block forever at 0.035.
+PITCH_CAL_MAX_STD = 0.10
+PITCH_CAL_MIN_SAMPLES = 20
 
 TRAIN_EPOCHS = 60
 TRAIN_BATCH_SIZE = 32

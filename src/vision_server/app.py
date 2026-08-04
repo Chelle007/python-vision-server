@@ -11,7 +11,13 @@ from vision_server.gestures.hand.cursor_fields import (
 from vision_server.gestures.hand.geometry import get_hand_rotation
 from vision_server.gestures.hand.watch_tap import apply_watch_tap_fields
 from vision_server.gestures.head import HEAD_RULES
-from vision_server.overlay import build_overlay_lines, draw_lock_ring, draw_overlay
+from vision_server.gestures.head.pitch_cal import PitchCalibrator
+from vision_server.overlay import (
+    build_overlay_lines,
+    draw_lock_ring,
+    draw_overlay,
+    draw_pitch_indicator,
+)
 from vision_server.tracking import (
     PlayerLock,
     collect_faces,
@@ -63,11 +69,12 @@ def main():
     face_mesh = create_face_mesh(max_num_faces=MAX_NUM_FACES)
     lstm = GestureLSTM()
     player_lock = PlayerLock()
+    pitch_cal = PitchCalibrator()
 
     cap = cv2.VideoCapture(0)
 
     print(f"Combined Vision Server Running. Sending UDP to {UDP_IP}:{UDP_PORT}")
-    print("Press Q to quit.")
+    print("Press Q to quit.  Press C to recalibrate look pitch neutral.")
 
     last_point = [-1.0, -1.0]
 
@@ -162,9 +169,13 @@ def main():
 
             if lock.face is not None:
                 apply_head_rules(lock.face, data)
+                pitch_cal.apply_to_payload(data, data.get("head_pitch", 0.0))
+            else:
+                pitch_cal.apply_to_payload(data, None)
 
             overlay_lines = build_overlay_lines(data, lstm_display)
             draw_overlay(frame, overlay_lines)
+            draw_pitch_indicator(frame, data.get("head_pitch", 0.0))
             draw_lock_ring(
                 frame,
                 status=lock.status,
@@ -176,8 +187,12 @@ def main():
 
             cv2.imshow("Combined Hand + Face Tracker", frame)
 
-            if cv2.waitKey(1) & 0xFF == ord("q"):
+            key = cv2.waitKey(1) & 0xFF
+            if key == ord("q"):
                 break
+            if key == ord("c"):
+                pitch_cal.request_recalibrate()
+                print("Pitch recalibration requested — hold still, look at the screen.")
     finally:
         cap.release()
         sock.close()
