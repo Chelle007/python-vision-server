@@ -8,7 +8,11 @@ NUM_FEATURES = 63  # 21 landmarks * (x, y, z)
 
 LSTM_BUFFER_SIZE = NUM_FRAMES
 LSTM_CONFIDENCE_THRESHOLD = 0.8
-LSTM_CLEAR_AFTER_MISSES = 8
+# Only wipe the sequence buffer after a sustained right-hand loss (seconds).
+# Brief MediaPipe dropouts must not force a full 30-frame refill.
+LSTM_HAND_MISS_CLEAR_S = 1.0
+# One-shot gesture stick: report action at most this long, then Idle until model Idle again.
+LSTM_ACTION_MAX_HOLD_S = 1.0
 
 MODEL_PATH = "models/escape_gestures.keras"
 DATA_DIR = "data"
@@ -38,7 +42,7 @@ CHALLENGER_MIN_FACE_WIDTH = 0.08
 CHALLENGER_MAX_CENTER_DIST = 0.35
 CHALLENGER_SIZE_REF = 0.22
 
-HEAD_TILT_THRESHOLD = 0.6
+HEAD_TILT_THRESHOLD = 0.5
 
 TRAIN_EPOCHS = 60
 TRAIN_BATCH_SIZE = 32
@@ -50,6 +54,9 @@ FOLDER_MAPPING = {
     "Idle": "Idle",
     "FP_Turn_Key": "Idle",
     "FP_Pull_Lever": "Idle",
+    "FP_Turn_Around": "Idle",
     "Turn_Key": "Turn_Key",
     "Pull_Lever": "Pull_Lever",
+    "Turn_Around_CW": "Turn_Around_CW",
+    "Turn_Around_CCW": "Turn_Around_CCW",
 }

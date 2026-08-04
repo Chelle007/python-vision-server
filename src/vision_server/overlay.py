@@ -17,10 +17,13 @@ def draw_text_with_bg(frame, text, x, y, color, scale=0.8, thickness=2, padding=
 
 
 def lstm_display_color(gesture_label):
-    if gesture_label in ("Turn_Key", "Pull_Lever"):
+    if gesture_label in (
+        "Turn_Key",
+        "Pull_Lever",
+        "Turn_Around_CW",
+        "Turn_Around_CCW",
+    ):
         return (0, 255, 0)
-    if gesture_label.startswith("Stabilizing"):
-        return (0, 255, 255)
     if gesture_label == "No Model":
         return (0, 0, 255)
     return (255, 255, 255)
@@ -69,10 +72,10 @@ def build_overlay_lines(data: dict, lstm_display: str) -> list[tuple[str, tuple[
         )
 
     if data["tilt_left"]:
-        overlay_lines.append(("HEAD TILT LEFT = TURN BACK", (0, 255, 0)))
+        overlay_lines.append(("HEAD TILT LEFT = TURN", (0, 255, 0)))
 
     if data["tilt_right"]:
-        overlay_lines.append(("HEAD TILT RIGHT = TURN BACK", (0, 255, 0)))
+        overlay_lines.append(("HEAD TILT RIGHT = TURN", (0, 255, 0)))
 
     return overlay_lines
 

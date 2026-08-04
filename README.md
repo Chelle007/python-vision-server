@@ -13,7 +13,7 @@ Python backend for **Gaming with Bare Hands** (CSIT321 FYP). Captures webcam inp
 | **MediaPipe Face Mesh**                | Head yaw/pitch for camera control                                   |
 | **Hand heuristics** (`gestures/hand/`) | Static gestures — fist, open palm, index up, peace, rotation |
 | **Head heuristics** (`gestures/head/`) | Head orientation (yaw/pitch); extensible for nod/shake/tilt         |
-| **LSTM** (`gestures/dynamic/`)         | Dynamic puzzle gestures — `Idle`, `Turn_Key`, `Pull_Lever`          |
+| **LSTM** (`gestures/dynamic/`)         | Dynamic gestures — Idle, Turn_Key, Pull_Lever, Turn_Around_CW/CCW |
 | **UDP**                                | Sends JSON every frame to Unity at `127.0.0.1:5052`                 |
 
 
@@ -80,10 +80,12 @@ python scripts/run_server.py
 | ----------------------- | ------------------------------------------- |
 | `LEFT FIST = MOVE`           | Left-hand movement gesture detected         |
 | `RIGHT FIST = GRAB`          | Right-hand grab detected                    |
-| `HEAD TILT LEFT = TURN BACK` | Head rolled left (180° body turn counter-clockwise) |
-| `HEAD TILT RIGHT = TURN BACK`| Head rolled right (180° body turn clockwise)        |
+| `HEAD TILT LEFT = TURN` | Head rolled left — hold to turn body (Unity) |
+| `HEAD TILT RIGHT = TURN`| Head rolled right — hold to turn body (Unity) |
+| `AI LSTM: Turn_Around_CW` | Clockwise circle (detected; reserved for puzzles) |
+| `AI LSTM: Turn_Around_CCW`| Counter-clockwise circle (detected; reserved for puzzles) |
 | `AI LSTM: Turn_Key`     | Dynamic puzzle gesture detected             |
-| `Stabilizing... (n/30)` | LSTM buffer filling (needs 30 frames first) |
+| `AI LSTM: Idle`         | No dynamic gesture (warmup is silent)       |
 
 
 ---
@@ -125,11 +127,14 @@ data/
 ├── Idle/              # Normal idle / random hand movement
 ├── Turn_Key/          # Correct key-turn motion
 ├── Pull_Lever/        # Correct lever-pull motion
+├── Turn_Around_CW/    # Clockwise circle (puzzle-ready; not used for body turn-back)
+├── Turn_Around_CCW/   # Counter-clockwise circle (puzzle-ready)
 ├── FP_Turn_Key/       # Wrong motions → trained as Idle (reduce false positives)
-└── FP_Pull_Lever/
+├── FP_Pull_Lever/
+└── FP_Turn_Around/    # Almost-circles / waves → Idle
 ```
 
-**Target:** ~300 clips per folder. Use your **right hand**, same distance/angle you use in gameplay.
+**Target:** ~300 clips per true-gesture folder (~150 CW + 150 CCW if balancing turn-around); ~50–80 in each `FP_*` folder. Use your **right hand**, same distance/angle you use in gameplay.
 
 ---
 
@@ -222,13 +227,13 @@ Key fields teammates may use:
 | Field                                  | Type   | Description                            |
 | -------------------------------------- | ------ | -------------------------------------- |
 | `head_yaw`, `head_pitch`               | float  | Head orientation (−1 to 1)             |
-| `tilt_left`, `tilt_right`              | bool   | Head roll left/right (ear to shoulder) |
+| `tilt_left`, `tilt_right`              | bool   | Head roll L/R; Unity hold-to-turn (not snap) |
 | `leftFist`, `leftIndexUp`, `leftPeace` | bool   | Left-hand movement                     |
 | `rightFist`, `rightOpenPalm`           | bool   | Right-hand interaction                 |
 | `rightIndexUp`                         | bool   | Right-hand index up (e.g. stand from sit) |
 | `palmX`, `palmY`                       | float  | Right palm screen position             |
 | `fistRotX/Y/Z`                         | float  | Right-hand rotation (inspect)          |
-| `lstm_gesture`                         | string | `Idle`, `Turn_Key`, or `Pull_Lever`    |
+| `lstm_gesture`                         | string | `Idle`, `Turn_Key`, `Pull_Lever`, `Turn_Around_CW`, `Turn_Around_CCW` |
 | `hands[]`                              | array  | Per-hand landmarks + world landmarks   |
 
 

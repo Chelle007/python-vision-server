@@ -10,7 +10,7 @@ from vision_server.features import flatten_landmarks
 from vision_server.tracking.hands import create_hands
 
 # Change this to "Pull_Lever", "Idle", etc.
-GESTURE_NAME = "Idle"
+GESTURE_NAME = "FP_Turn_Around"
 
 
 def main():
