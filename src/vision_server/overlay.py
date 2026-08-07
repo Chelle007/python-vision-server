@@ -1,6 +1,15 @@
 import cv2
 
-from vision_server.config import HEAD_LOOK_UP_PITCH_THRESHOLD
+from vision_server.config import CAMERA_HEIGHT, HEAD_LOOK_UP_PITCH_THRESHOLD
+
+# Overlay sizes were tuned for ~720p previews; scale by frame height so 640x480
+# (and other negotiated sizes) stay readable without dominating the image.
+_UI_DESIGN_HEIGHT = 720.0
+
+
+def _ui_scale(frame) -> float:
+    h = float(frame.shape[0]) if frame is not None and frame.size else CAMERA_HEIGHT
+    return max(0.5, min(1.25, h / _UI_DESIGN_HEIGHT))
 
 
 def draw_text_with_bg(frame, text, x, y, color, scale=0.8, thickness=2, padding=8):
@@ -142,6 +151,7 @@ def draw_lock_ring(
         return
 
     h, w = frame.shape[:2]
+    s = _ui_scale(frame)
     color = _lock_status_color(status)
 
     box_w = max(ring_size[0] * 1.3, 0.08) * w
@@ -155,7 +165,7 @@ def draw_lock_ring(
     y1 = int(cy + box_h / 2)
 
     corner = int(min(box_w, box_h) * 0.22)
-    thickness = 2
+    thickness = max(1, int(round(2 * s)))
 
     for (x, y), dx, dy in (
         ((x0, y0), 1, 1),
@@ -169,7 +179,11 @@ def draw_lock_ring(
     if status == "challenger" and progress > 0:
         # Progress bar tracking the top edge as the takeover hold fills.
         fill_x1 = int(x0 + (x1 - x0) * min(1.0, max(0.0, progress)))
-        cv2.line(frame, (x0, y0 - 6), (fill_x1, y0 - 6), color, 3, cv2.LINE_AA)
+        bar_off = max(4, int(round(6 * s)))
+        bar_thick = max(2, int(round(3 * s)))
+        cv2.line(
+            frame, (x0, y0 - bar_off), (fill_x1, y0 - bar_off), color, bar_thick, cv2.LINE_AA
+        )
 
 
 
@@ -185,20 +199,22 @@ def draw_pitch_indicator(
     so it matches the physical motion.
     """
     h, w = frame.shape[:2]
+    s = _ui_scale(frame)
     bar_h = int(h * 0.35)
-    bar_w = 18
-    margin = 16
+    bar_w = max(10, int(round(18 * s)))
+    margin = max(8, int(round(16 * s)))
     x0 = w - margin - bar_w
     y0 = int(h * 0.12)
     y1 = y0 + bar_h
     x1 = x0 + bar_w
+    tick = max(2, int(round(4 * s)))
 
     # Background track
     cv2.rectangle(frame, (x0, y0), (x1, y1), (0, 0, 0), -1)
     cv2.rectangle(frame, (x0, y0), (x1, y1), (80, 80, 80), 1)
 
     mid_y = (y0 + y1) // 2
-    cv2.line(frame, (x0 - 4, mid_y), (x1 + 4, mid_y), (100, 100, 100), 1)
+    cv2.line(frame, (x0 - tick, mid_y), (x1 + tick, mid_y), (100, 100, 100), 1)
 
     # Threshold marks for look-up (negative pitch → upper half of meter)
     pitch = max(-1.0, min(1.0, float(head_pitch)))
@@ -210,54 +226,73 @@ def draw_pitch_indicator(
     # Look-up arm line at pitch = -thr
     t_up = (1.0 - (-thr)) * 0.5
     y_up = int(y0 + (1.0 - t_up) * bar_h)
-    cv2.line(frame, (x0 - 6, y_up), (x1 + 6, y_up), (0, 255, 255), 1)
+    thr_tick = max(3, int(round(6 * s)))
+    cv2.line(frame, (x0 - thr_tick, y_up), (x1 + thr_tick, y_up), (0, 255, 255), 1)
 
     looking_up = pitch <= -thr
     color = (0, 255, 255) if looking_up else (0, 200, 0)
     # Fill from center toward current pitch
     fill_y0 = min(marker_y, mid_y)
     fill_y1 = max(marker_y, mid_y)
+    inset = max(1, int(round(2 * s)))
     if fill_y1 > fill_y0:
-        cv2.rectangle(frame, (x0 + 2, fill_y0), (x1 - 2, fill_y1), color, -1)
+        cv2.rectangle(
+            frame, (x0 + inset, fill_y0), (x1 - inset, fill_y1), color, -1
+        )
 
     # Needle
-    cv2.line(frame, (x0 - 2, marker_y), (x1 + 2, marker_y), (255, 255, 255), 2)
+    cv2.line(
+        frame,
+        (x0 - inset, marker_y),
+        (x1 + inset, marker_y),
+        (255, 255, 255),
+        max(1, int(round(2 * s))),
+    )
 
     label = f"{pitch:+.2f}"
     draw_text_with_bg(
         frame,
         label,
-        x0 - 70,
-        y0 + 18,
+        x0 - int(round(70 * s)),
+        y0 + int(round(18 * s)),
         color,
-        scale=0.55,
+        scale=0.55 * s,
         thickness=1,
-        padding=4,
+        padding=max(2, int(round(4 * s))),
     )
     draw_text_with_bg(
         frame,
         "UP",
-        x0 - 28,
-        y0 + 14,
+        x0 - int(round(28 * s)),
+        y0 + int(round(14 * s)),
         (180, 180, 180),
-        scale=0.4,
+        scale=0.4 * s,
         thickness=1,
-        padding=2,
+        padding=max(1, int(round(2 * s))),
     )
     draw_text_with_bg(
         frame,
         "DN",
-        x0 - 28,
-        y1 + 14,
+        x0 - int(round(28 * s)),
+        y1 + int(round(14 * s)),
         (180, 180, 180),
-        scale=0.4,
+        scale=0.4 * s,
         thickness=1,
-        padding=2,
+        padding=max(1, int(round(2 * s))),
     )
 
 
 def draw_overlay(frame, overlay_lines: list[tuple[str, tuple[int, int, int]]]) -> None:
-    y = 40
+    s = _ui_scale(frame)
+    # Base values matched ~720p; shrink with frame height for 640x480 etc.
+    x = max(6, int(round(10 * s)))
+    y = max(18, int(round(36 * s)))
+    step = max(16, int(round(36 * s)))
+    scale = 0.7 * s
+    thickness = max(1, int(round(2 * s)))
+    padding = max(3, int(round(6 * s)))
     for txt, color in overlay_lines:
-        draw_text_with_bg(frame, txt, 10, y, color)
-        y += 40
+        draw_text_with_bg(
+            frame, txt, x, y, color, scale=scale, thickness=thickness, padding=padding
+        )
+        y += step

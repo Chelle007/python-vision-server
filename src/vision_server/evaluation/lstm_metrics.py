@@ -50,6 +50,7 @@ class LayerAResult:
                 classification_report(
                     self.y_true,
                     self.y_pred,
+                    labels=list(range(len(CLASSES))),
                     target_names=CLASSES,
                     digits=4,
                     zero_division=0,
