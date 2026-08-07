@@ -10,6 +10,22 @@ CAMERA_INDEX = 0
 CAMERA_WIDTH = 640
 CAMERA_HEIGHT = 480
 CAMERA_FPS = 30
+# Soft webcam glitches are common on macOS/AVFoundation — do not exit on one bad read.
+CAMERA_SOFT_RETRIES = 8
+CAMERA_SOFT_RETRY_SLEEP_S = 0.05
+CAMERA_REOPEN_SLEEP_S = 0.4
+
+# A frame at or above this counts as stalled, reported as `slow=N` in the
+# [perf] line. ~33ms is one frame at 30fps, so 100ms means the loop lost 3.
+FRAME_SLOW_MS = 100.0
+# Periodic percentile summary, seconds between lines. 0 disables it.
+FRAME_STATS_INTERVAL_S = 5.0
+
+# Thread budget for OpenCV / MediaPipe / TensorFlow (see runtime.py). Each
+# library otherwise sizes its pool to the logical core count, so all three
+# oversubscribe the few performance cores Unity is already using.
+CPU_THREADS = 2
+TF_INTER_OP_THREADS = 1
 
 NUM_FRAMES = 30
 NUM_FEATURES = 63  # 21 landmarks * (x, y, z)
@@ -21,14 +37,29 @@ LSTM_CONFIDENCE_THRESHOLD = 0.8
 LSTM_HAND_MISS_CLEAR_S = 1.0
 # One-shot gesture stick: report action at most this long, then Idle until model Idle again.
 LSTM_ACTION_MAX_HOLD_S = 1.0
+# LSTM inference only runs while the puzzle gate is open (see puzzle_gate.py).
+# Off at startup: Unity opens it per puzzle; P toggles it by hand for testing.
+PUZZLE_GATE_DEFAULT_ACTIVE = False
 
 MODEL_PATH = "models/escape_gestures.keras"
 DATA_DIR = "data"
 
 MEDIAPIPE_MIN_DETECTION_CONFIDENCE = 0.7
 MEDIAPIPE_MIN_TRACKING_CONFIDENCE = 0.7
+# Hand model: 0 = lite (~2x faster, slightly coarser landmarks), 1 = full.
+# Raise to 1 on a machine with CPU headroom (e.g. the demo laptop).
+MEDIAPIPE_HAND_MODEL_COMPLEXITY = 0
+# Run inference on a downscaled copy; capture and display stay full size.
+# Left at 1.0 (off) on purpose: benchmarking showed 320x240 and 640x480 cost
+# the SAME (~20ms), because MediaPipe resizes to its model's fixed input size
+# (~192x192) internally. Downscaling here only loses distant hands and adds a
+# resize. Kept configurable so the measurement does not get redone from scratch.
+MEDIAPIPE_INPUT_SCALE = 1.0
 
 MAX_NUM_FACES = 2
+# 4 is deliberate: PlayerLock needs to SEE bystanders' hands in order to reject
+# the ones too far from the locked player's face (see player_lock._hand_ok).
+# Lowering this makes crowd robustness worse, not better.
 MAX_NUM_HANDS = 4
 
 # Player lock (distances in face-widths; timeouts in wall-clock seconds)

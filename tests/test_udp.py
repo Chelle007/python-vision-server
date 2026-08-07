@@ -42,6 +42,8 @@ def test_default_payload_has_unity_keys():
         "player_locked",
         "lock_id",
         "lock_status",
+        "puzzle_active",
+        "puzzle_gate_source",
     }
     assert set(data.keys()) == expected_keys
 
@@ -61,3 +63,6 @@ def test_default_payload_types():
     assert data["player_locked"] is False
     assert data["lock_id"] == 0
     assert data["lock_status"] == "unlocked"
+    # Gate ships closed so Unity, not the payload default, opens it per puzzle.
+    assert data["puzzle_active"] is False
+    assert data["puzzle_gate_source"] == "default"

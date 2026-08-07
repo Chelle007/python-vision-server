@@ -69,6 +69,11 @@ def build_overlay_lines(data: dict, lstm_display: str) -> list[tuple[str, tuple[
         (f"AI LSTM: {lstm_display}", lstm_display_color(lstm_display)),
     ]
 
+    if data.get("puzzle_active"):
+        overlay_lines.append(("PUZZLE MODE: ON (P)", (0, 255, 255)))
+    else:
+        overlay_lines.append(("PUZZLE MODE: OFF (P)", (150, 150, 150)))
+
     status = data.get("lock_status", "unlocked")
     overlay_lines.append(_lock_status_label(status, data.get("lock_id", 0)))
 

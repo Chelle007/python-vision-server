@@ -1,3 +1,5 @@
+import time
+
 import cv2
 import mediapipe as mp
 
@@ -6,7 +8,9 @@ from vision_server.config import (
     CAMERA_FPS,
     CAMERA_HEIGHT,
     CAMERA_WIDTH,
+    FRAME_SLOW_MS,
     MAX_NUM_FACES,
+    MEDIAPIPE_INPUT_SCALE,
     MAX_NUM_HANDS,
     UDP_IP,
     UDP_PORT,
@@ -27,6 +31,9 @@ from vision_server.overlay import (
     draw_overlay,
     draw_pitch_indicator,
 )
+from vision_server.perfstats import FrameStats
+from vision_server.puzzle_gate import PuzzleGate
+from vision_server.runtime import apply_opencv_threads
 from vision_server.tracking import (
     PlayerLock,
     collect_faces,
@@ -69,6 +76,7 @@ def _append_hand_packet(data: dict, hand) -> None:
 
 
 def main():
+    apply_opencv_threads()
     sock = create_udp_socket()
 
     mp_hands = mp.solutions.hands
@@ -79,6 +87,9 @@ def main():
     lstm = GestureLSTM()
     player_lock = PlayerLock()
     pitch_cal = PitchCalibrator()
+    # Keyboard-driven for now; Unity becomes a second caller of set_active().
+    puzzle_gate = PuzzleGate()
+    frame_stats = FrameStats()
 
     # Threaded reader drops stale buffered frames while MediaPipe runs.
     cap = LatestFrameCamera()
@@ -90,6 +101,7 @@ def main():
         f"(requested {CAMERA_WIDTH}x{CAMERA_HEIGHT} @ {CAMERA_FPS})"
     )
     print("Press Q to quit.  Press C to recalibrate look pitch neutral.")
+    print("Press P to toggle puzzle mode (LSTM inference) — starts OFF.")
 
     last_point = [-1.0, -1.0]
 
@@ -98,14 +110,49 @@ def main():
             success, frame = cap.read()
 
             if not success or frame is None:
-                print("Failed to read webcam.")
-                break
+                # read() only fails after release/stop; keep going if still open.
+                if not cap.isOpened():
+                    d = cap.diagnostics()
+                    print(
+                        "Webcam reader stopped. "
+                        f"last_event={d['exit_reason']} "
+                        f"device_open={d['device_open']} "
+                        f"reopen_count={d['reopen_count']} "
+                        f"frame_id={d['frame_id']} "
+                        f"uptime_s={d['uptime_s']}"
+                    )
+                    break
+                print("[cam] waiting for next frame…")
+                continue
+
+            t_start = time.perf_counter()
+            lstm_ms = 0.0
 
             frame = cv2.flip(frame, 1)
             rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            if MEDIAPIPE_INPUT_SCALE != 1.0:
+                # Landmarks come back normalised, so drawing, PlayerLock, the
+                # LSTM and the UDP payload all keep working off `frame` at full
+                # size — only the pixels MediaPipe scans get smaller.
+                rgb = cv2.resize(
+                    rgb,
+                    None,
+                    fx=MEDIAPIPE_INPUT_SCALE,
+                    fy=MEDIAPIPE_INPUT_SCALE,
+                    interpolation=cv2.INTER_AREA,
+                )
+            t_prep = time.perf_counter()
 
             hand_results = hands.process(rgb)
+            t_hands = time.perf_counter()
+            # Hand cost scales with hands actually detected, not with
+            # MAX_NUM_HANDS: measured ~18ms at zero hands and ~60ms at two,
+            # with no difference between max_num_hands 2 and 4. Tracked so a
+            # slow `hands` stage can be told apart from a busy frame.
+            hands_n = len(hand_results.multi_hand_landmarks or ())
+
             face_results = face_mesh.process(rgb)
+            t_face = time.perf_counter()
 
             lock = player_lock.update(
                 collect_faces(face_results),
@@ -116,6 +163,7 @@ def main():
             data["player_locked"] = lock.locked
             data["lock_id"] = lock.lock_id
             data["lock_status"] = lock.status
+            puzzle_gate.apply_to_payload(data)
 
             if lock.flush_lstm:
                 lstm.flush()
@@ -165,7 +213,12 @@ def main():
                 data["fistRotY"] = round(fist_rot_y, 3)
                 data["fistRotZ"] = round(fist_rot_z, 3)
 
-                lstm_display = lstm.predict(right_landmarks)
+                # Buffer keeps filling either way; only inference is gated.
+                t_lstm = time.perf_counter()
+                lstm_display = lstm.predict(
+                    right_landmarks, infer=puzzle_gate.active
+                )
+                lstm_ms = (time.perf_counter() - t_lstm) * 1000.0
                 data["lstm_gesture"] = (
                     lstm_display if lstm_display in lstm.classes else "Idle"
                 )
@@ -199,15 +252,52 @@ def main():
                 progress=lock.progress,
             )
             send_payload(sock, data)
+            t_send = time.perf_counter()
 
+            # imshow + waitKey drive the macOS HighGUI event loop, which is
+            # neither free nor needed by Unity — this is the debug preview.
             cv2.imshow("Combined Hand + Face Tracker", frame)
 
             key = cv2.waitKey(1) & 0xFF
+            t_show = time.perf_counter()
+
+            # Perf guard: a stalled frame is a compute problem, not a camera
+            # one — the drain thread grabs independently of this loop. "other"
+            # covers overlay drawing, UDP send, imshow and waitKey.
+            total_ms = (t_show - t_start) * 1000.0
+            prep_ms = (t_prep - t_start) * 1000.0
+            hands_ms = (t_hands - t_prep) * 1000.0
+            face_ms = (t_face - t_hands) * 1000.0
+            # Everything between the face mesh and the display: PlayerLock,
+            # gesture rules, overlay drawing and the UDP send. Measured at
+            # ~1ms combined, so it is billed as one stage rather than four.
+            # The LSTM runs inside this region, so bill it separately.
+            logic_ms = (t_send - t_face) * 1000.0 - lstm_ms
+            show_ms = (t_show - t_send) * 1000.0
+            frame_stats.record(
+                total_ms=total_ms,
+                prep_ms=prep_ms,
+                hands_ms=hands_ms,
+                face_ms=face_ms,
+                lstm_ms=lstm_ms,
+                logic_ms=logic_ms,
+                show_ms=show_ms,
+                hands_n=hands_n,
+                slow=total_ms >= FRAME_SLOW_MS,
+            )
+            frame_stats.maybe_report()
+
             if key == ord("q"):
                 break
             if key == ord("c"):
                 pitch_cal.request_recalibrate()
                 print("Pitch recalibration requested — hold still, look at the screen.")
+            if key == ord("p"):
+                puzzle_gate.toggle(source="keyboard")
+                print(
+                    "Puzzle mode "
+                    f"{'ON — LSTM predicting' if puzzle_gate.active else 'OFF — LSTM idle'}"
+                )
     finally:
         cap.release()
         sock.close()

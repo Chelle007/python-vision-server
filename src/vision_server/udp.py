@@ -44,6 +44,8 @@ def default_payload() -> dict:
         "indexTipY": -1.0,
         "hands": [],
         "lstm_gesture": "Idle",
+        "puzzle_active": False,
+        "puzzle_gate_source": "default",
         "player_locked": False,
         "lock_id": 0,
         "lock_status": "unlocked",

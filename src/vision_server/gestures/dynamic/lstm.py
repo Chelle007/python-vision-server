@@ -107,12 +107,22 @@ class GestureLSTM:
 
         return raw_label
 
-    def predict(self, landmarks):
+    def predict(self, landmarks, *, infer: bool = True):
         if self.model is None:
             return "No Model"
 
         self.register_hand_seen()
         self.frame_buffer.append(flatten_landmarks(landmarks))
+
+        if not infer:
+            # Gate closed: keep filling the buffer so the first prediction after
+            # it opens is instant, but skip the Keras call. Deliberately not
+            # flush() — that would dump the warm buffer and cost a 30-frame
+            # refill on every puzzle start. Clear the label so a stale action
+            # cannot leak across the closed->open edge.
+            self._reset_action_hold()
+            self.last_output = "Idle"
+            return "Idle"
 
         if len(self.frame_buffer) < self.buffer_size:
             return self.last_output
