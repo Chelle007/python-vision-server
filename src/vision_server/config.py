@@ -3,6 +3,14 @@
 UDP_IP = "127.0.0.1"
 UDP_PORT = 5052
 
+# Live webcam (not used by file-based Layer B eval).
+CAMERA_INDEX = 0
+# Lower capture size → less MediaPipe cost and less queue lag (device may only
+# approximate; Actual size is whatever OpenCV negotiates).
+CAMERA_WIDTH = 640
+CAMERA_HEIGHT = 480
+CAMERA_FPS = 30
+
 NUM_FRAMES = 30
 NUM_FEATURES = 63  # 21 landmarks * (x, y, z)
 

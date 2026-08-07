@@ -5,6 +5,7 @@ import cv2
 import mediapipe as mp
 import numpy as np
 
+from vision_server.camera import LatestFrameCamera
 from vision_server.config import DATA_DIR, NUM_FRAMES
 from vision_server.features import flatten_landmarks
 from vision_server.tracking.hands import create_hands
@@ -30,18 +31,21 @@ def main():
         [name for name in os.listdir(dataset_dir) if name.endswith(".npy")]
     )
 
-    cap = cv2.VideoCapture(0)
+    # Same low-latency path as the live vision server.
+    cap = LatestFrameCamera()
+    cam_w, cam_h, cam_fps = cap.negotiated_size()
 
     print("--- DATA RECORDER LOADED ---")
     print(f"Target Gesture: {GESTURE_NAME}")
     print(f"Saving to: {dataset_dir}")
+    print(f"Camera negotiated: {cam_w}x{cam_h} @ {cam_fps:.0f} fps")
     print(f"Currently have {total_clips} clips saved.")
     print("Press 'R' to record a clip. Press 'Q' to quit.")
 
     try:
         while cap.isOpened():
             success, frame = cap.read()
-            if not success:
+            if not success or frame is None:
                 break
 
             frame = cv2.flip(frame, 1)

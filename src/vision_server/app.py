@@ -1,7 +1,16 @@
 import cv2
 import mediapipe as mp
 
-from vision_server.config import MAX_NUM_FACES, MAX_NUM_HANDS, UDP_IP, UDP_PORT
+from vision_server.camera import LatestFrameCamera
+from vision_server.config import (
+    CAMERA_FPS,
+    CAMERA_HEIGHT,
+    CAMERA_WIDTH,
+    MAX_NUM_FACES,
+    MAX_NUM_HANDS,
+    UDP_IP,
+    UDP_PORT,
+)
 from vision_server.gestures.dynamic import GestureLSTM
 from vision_server.gestures.hand import HAND_RULES
 from vision_server.gestures.hand.cursor_fields import (
@@ -71,9 +80,15 @@ def main():
     player_lock = PlayerLock()
     pitch_cal = PitchCalibrator()
 
-    cap = cv2.VideoCapture(0)
+    # Threaded reader drops stale buffered frames while MediaPipe runs.
+    cap = LatestFrameCamera()
+    cam_w, cam_h, cam_fps = cap.negotiated_size()
 
     print(f"Combined Vision Server Running. Sending UDP to {UDP_IP}:{UDP_PORT}")
+    print(
+        f"Camera negotiated: {cam_w}x{cam_h} @ {cam_fps:.0f} fps "
+        f"(requested {CAMERA_WIDTH}x{CAMERA_HEIGHT} @ {CAMERA_FPS})"
+    )
     print("Press Q to quit.  Press C to recalibrate look pitch neutral.")
 
     last_point = [-1.0, -1.0]
@@ -82,7 +97,7 @@ def main():
         while cap.isOpened():
             success, frame = cap.read()
 
-            if not success:
+            if not success or frame is None:
                 print("Failed to read webcam.")
                 break
 
