@@ -38,6 +38,9 @@ def test_default_payload_has_unity_keys():
         "lock_status",
         "puzzle_active",
         "puzzle_gate_source",
+        "action_hand",
+        "move_hand",
+        "hand_roles_source",
     }
     assert set(data.keys()) == expected_keys
 

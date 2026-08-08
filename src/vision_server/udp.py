@@ -46,6 +46,11 @@ def default_payload() -> dict:
         "lstm_gesture": "Idle",
         "puzzle_active": False,
         "puzzle_gate_source": "default",
+        # left*/right* fields above are ROLE fields (left = MOVE hand,
+        # right = ACTION hand). These say which physical hand fills each.
+        "action_hand": "right",
+        "move_hand": "left",
+        "hand_roles_source": "default",
         "player_locked": False,
         "lock_id": 0,
         "lock_status": "unlocked",

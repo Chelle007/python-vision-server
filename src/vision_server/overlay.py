@@ -74,6 +74,11 @@ def build_overlay_lines(data: dict, lstm_display: str) -> list[tuple[str, tuple[
     else:
         overlay_lines.append(("PUZZLE MODE: OFF (P)", (150, 150, 150)))
 
+    action_hand = str(data.get("action_hand", "right")).upper()
+    overlay_lines.append(
+        (f"ACTION HAND: {action_hand} (H to swap)", (255, 200, 0))
+    )
+
     status = data.get("lock_status", "unlocked")
     overlay_lines.append(_lock_status_label(status, data.get("lock_id", 0)))
 
@@ -87,23 +92,28 @@ def build_overlay_lines(data: dict, lstm_display: str) -> list[tuple[str, tuple[
     # Look-up only meaningful on calibrated scale (rest ~0). Used to switch tilt labels.
     looking_up = is_calibrated and head_pitch <= -thr
 
+    # left*/right* are role fields, so the label names the physical hand
+    # currently holding that role rather than a fixed side.
+    mv = str(data.get("move_hand", "left")).upper()
+    ac = action_hand
+
     if data["leftFist"]:
-        overlay_lines.append(("LEFT FIST = MOVE", (0, 255, 0)))
+        overlay_lines.append((f"{mv} FIST = MOVE", (0, 255, 0)))
 
     if data["leftIndexUp"]:
-        overlay_lines.append(("LEFT INDEX = JUMP", (0, 255, 0)))
+        overlay_lines.append((f"{mv} INDEX = JUMP", (0, 255, 0)))
 
     if data["leftPeace"]:
-        overlay_lines.append(("LEFT PEACE = CROUCH", (0, 255, 0)))
+        overlay_lines.append((f"{mv} PEACE = CROUCH", (0, 255, 0)))
 
     if data["rightFist"]:
-        overlay_lines.append(("RIGHT FIST = GRAB", (0, 255, 0)))
+        overlay_lines.append((f"{ac} FIST = GRAB", (0, 255, 0)))
 
     if data["rightOpenPalm"]:
-        overlay_lines.append(("RIGHT OPEN PALM = RELEASE", (0, 255, 0)))
+        overlay_lines.append((f"{ac} OPEN PALM = RELEASE", (0, 255, 0)))
 
     if data["rightPeace"]:
-        overlay_lines.append(("RIGHT PEACE = STAND", (0, 255, 0)))
+        overlay_lines.append((f"{ac} PEACE = STAND", (0, 255, 0)))
 
     if data["watchTap"]:
         overlay_lines.append(("WATCH TAP", (0, 255, 0)))

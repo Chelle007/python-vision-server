@@ -1,4 +1,8 @@
-"""Right-hand cursor fields sent to Unity (palm, index tip)."""
+"""Action-hand cursor fields sent to Unity (palm, index tip).
+
+Positions stay in real screen space and are never mirrored — which physical
+hand holds the ACTION role does not change where the cursor should point.
+"""
 
 from .geometry import get_index_tip_position, get_palm_position
 
@@ -10,7 +14,7 @@ def reset_last_point(last_point: list[float]) -> None:
     last_point[1] = INVALID_COORD
 
 
-def apply_right_hand_cursor_fields(
+def apply_cursor_fields(
     data: dict,
     landmarks,
     gestures: dict[str, bool],

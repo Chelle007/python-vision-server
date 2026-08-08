@@ -1,5 +1,5 @@
 from vision_server.gestures.hand.cursor_fields import (
-    apply_right_hand_cursor_fields,
+    apply_cursor_fields,
     reset_last_point,
 )
 from vision_server.udp import default_payload
@@ -15,7 +15,7 @@ def _fist_gestures():
     return {"fist": True, "open_palm": False, "index_up": False, "peace": False}
 
 
-def test_apply_right_hand_cursor_fields_when_pointing():
+def test_apply_cursor_fields_when_pointing():
     data = default_payload()
     last_point = [-1.0, -1.0]
     landmarks = make_landmarks(
@@ -29,7 +29,7 @@ def test_apply_right_hand_cursor_fields_when_pointing():
         }
     )
 
-    apply_right_hand_cursor_fields(data, landmarks, _pointing_gestures(), last_point)
+    apply_cursor_fields(data, landmarks, _pointing_gestures(), last_point)
 
     assert data["palmX"] == 0.5
     assert data["palmY"] == 0.5
@@ -38,7 +38,7 @@ def test_apply_right_hand_cursor_fields_when_pointing():
     assert last_point == [0.5, 0.5]
 
 
-def test_apply_right_hand_cursor_fields_latches_palm_on_fist():
+def test_apply_cursor_fields_latches_palm_on_fist():
     data = default_payload()
     last_point = [0.4, 0.6]
     landmarks = make_landmarks(
@@ -52,7 +52,7 @@ def test_apply_right_hand_cursor_fields_latches_palm_on_fist():
         }
     )
 
-    apply_right_hand_cursor_fields(data, landmarks, _fist_gestures(), last_point)
+    apply_cursor_fields(data, landmarks, _fist_gestures(), last_point)
 
     assert data["palmX"] == 0.4
     assert data["palmY"] == 0.6
