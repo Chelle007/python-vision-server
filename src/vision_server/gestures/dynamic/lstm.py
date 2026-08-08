@@ -8,6 +8,7 @@ from vision_server.config import (
     LSTM_BUFFER_SIZE,
     LSTM_CONFIDENCE_THRESHOLD,
     LSTM_HAND_MISS_CLEAR_S,
+    LSTM_MIRRORED_CLASS_SWAP,
     MODEL_PATH,
 )
 from vision_server.features import flatten_landmarks
@@ -107,12 +108,14 @@ class GestureLSTM:
 
         return raw_label
 
-    def predict(self, landmarks, *, infer: bool = True):
+    def predict(self, landmarks, *, infer: bool = True, mirror: bool = False):
+        """Classify the rolling window. ``mirror`` reflects a left action hand
+        into right-hand geometry before buffering (see ``flatten_landmarks``)."""
         if self.model is None:
             return "No Model"
 
         self.register_hand_seen()
-        self.frame_buffer.append(flatten_landmarks(landmarks))
+        self.frame_buffer.append(flatten_landmarks(landmarks, mirror=mirror))
 
         if not infer:
             # Gate closed: keep filling the buffer so the first prediction after
@@ -137,6 +140,11 @@ class GestureLSTM:
             raw_label = self.classes[class_id]
         else:
             raw_label = "Idle"
+
+        if mirror:
+            # Mirroring reversed the on-screen turn direction; undo it on the
+            # label so a class always means the same motion the player made.
+            raw_label = LSTM_MIRRORED_CLASS_SWAP.get(raw_label, raw_label)
 
         self.last_output = self._apply_action_hold(raw_label)
         return self.last_output

@@ -15,7 +15,7 @@ from vision_server.evaluation.segment_scoring import (
 from vision_server.gestures.dynamic import GestureLSTM
 from vision_server.gestures.hand import HAND_RULES
 from vision_server.gestures.hand.cursor_fields import (
-    apply_right_hand_cursor_fields,
+    apply_cursor_fields,
     reset_last_point,
 )
 from vision_server.gestures.hand.geometry import get_hand_rotation
@@ -132,9 +132,7 @@ def export_annotated_video(
                         data["rightOpenPalm"] = gestures["open_palm"]
                         data["rightIndexUp"] = gestures["index_up"]
                         data["rightPeace"] = gestures["peace"]
-                        apply_right_hand_cursor_fields(
-                            data, landmarks, gestures, last_point
-                        )
+                        apply_cursor_fields(data, landmarks, gestures, last_point)
                         fist_rot_x, fist_rot_y, fist_rot_z = get_hand_rotation(
                             landmarks
                         )

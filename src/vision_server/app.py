@@ -18,13 +18,14 @@ from vision_server.config import (
 from vision_server.gestures.dynamic import GestureLSTM
 from vision_server.gestures.hand import HAND_RULES
 from vision_server.gestures.hand.cursor_fields import (
-    apply_right_hand_cursor_fields,
+    apply_cursor_fields,
     reset_last_point,
 )
 from vision_server.gestures.hand.geometry import get_hand_rotation
 from vision_server.gestures.hand.watch_tap import apply_watch_tap_fields
 from vision_server.gestures.head import HEAD_RULES
 from vision_server.gestures.head.pitch_cal import PitchCalibrator
+from vision_server.hand_roles import HandRoles
 from vision_server.overlay import (
     build_overlay_lines,
     draw_lock_ring,
@@ -89,6 +90,8 @@ def main():
     pitch_cal = PitchCalibrator()
     # Keyboard-driven for now; Unity becomes a second caller of set_active().
     puzzle_gate = PuzzleGate()
+    # Same deal: H swaps the hands today, Unity's settings screen later.
+    hand_roles = HandRoles()
     frame_stats = FrameStats()
 
     # Threaded reader drops stale buffered frames while MediaPipe runs.
@@ -102,6 +105,10 @@ def main():
     )
     print("Press Q to quit.  Press C to recalibrate look pitch neutral.")
     print("Press P to toggle puzzle mode (LSTM inference) — starts OFF.")
+    print(
+        "Press H to swap hand roles — action (grab/cursor/LSTM) hand starts "
+        f"{hand_roles.action_hand.upper()}."
+    )
 
     last_point = [-1.0, -1.0]
 
@@ -164,50 +171,52 @@ def main():
             data["lock_id"] = lock.lock_id
             data["lock_status"] = lock.status
             puzzle_gate.apply_to_payload(data)
+            hand_roles.apply_to_payload(data)
 
             if lock.flush_lstm:
                 lstm.flush()
                 reset_last_point(last_point)
 
-            right_hand_seen = False
+            action_hand_seen = False
             lstm_display = "Idle"
-            left_landmarks = None
-            right_landmarks = None
+            move_landmarks = None
+            action_landmarks = None
+            # The payload keys stay left*/right*, but they carry ROLES, not
+            # physical sides: left* = MOVE hand, right* = ACTION hand. Unity
+            # therefore needs no change when the player swaps hands.
+            move, action = hand_roles.split(lock)
+            mirror = hand_roles.mirror_action_hand
 
-            if lock.left is not None:
-                left = lock.left
-                left_landmarks = left.landmarks
-                _append_hand_packet(data, left)
+            if move is not None:
+                move_landmarks = move.landmarks
+                _append_hand_packet(data, move)
                 mp_draw.draw_landmarks(
-                    frame, left.mp_landmarks, mp_hands.HAND_CONNECTIONS
+                    frame, move.mp_landmarks, mp_hands.HAND_CONNECTIONS
                 )
-                gestures = evaluate_hand_rules(left_landmarks)
+                gestures = evaluate_hand_rules(move_landmarks)
                 data["leftFist"] = gestures["fist"]
                 data["leftOpenPalm"] = gestures["open_palm"]
                 data["leftIndexUp"] = gestures["index_up"]
                 data["leftPeace"] = gestures["peace"]
 
-            if lock.right is not None:
-                right = lock.right
-                right_landmarks = right.landmarks
-                right_hand_seen = True
-                _append_hand_packet(data, right)
+            if action is not None:
+                action_landmarks = action.landmarks
+                action_hand_seen = True
+                _append_hand_packet(data, action)
                 mp_draw.draw_landmarks(
-                    frame, right.mp_landmarks, mp_hands.HAND_CONNECTIONS
+                    frame, action.mp_landmarks, mp_hands.HAND_CONNECTIONS
                 )
-                gestures = evaluate_hand_rules(right_landmarks)
+                gestures = evaluate_hand_rules(action_landmarks)
                 lstm.register_hand_seen()
                 data["rightFist"] = gestures["fist"]
                 data["rightOpenPalm"] = gestures["open_palm"]
                 data["rightIndexUp"] = gestures["index_up"]
                 data["rightPeace"] = gestures["peace"]
 
-                apply_right_hand_cursor_fields(
-                    data, right_landmarks, gestures, last_point
-                )
+                apply_cursor_fields(data, action_landmarks, gestures, last_point)
 
                 fist_rot_x, fist_rot_y, fist_rot_z = get_hand_rotation(
-                    right_landmarks
+                    action_landmarks, mirror=mirror
                 )
                 data["fistRotX"] = round(fist_rot_x, 3)
                 data["fistRotY"] = round(fist_rot_y, 3)
@@ -216,18 +225,18 @@ def main():
                 # Buffer keeps filling either way; only inference is gated.
                 t_lstm = time.perf_counter()
                 lstm_display = lstm.predict(
-                    right_landmarks, infer=puzzle_gate.active
+                    action_landmarks, infer=puzzle_gate.active, mirror=mirror
                 )
                 lstm_ms = (time.perf_counter() - t_lstm) * 1000.0
                 data["lstm_gesture"] = (
                     lstm_display if lstm_display in lstm.classes else "Idle"
                 )
 
-            if apply_watch_tap_fields(data, left_landmarks, right_landmarks):
+            if apply_watch_tap_fields(data, move_landmarks, action_landmarks):
                 reset_last_point(last_point)
                 lstm_display = "Idle"
 
-            if not right_hand_seen:
+            if not action_hand_seen:
                 reset_last_point(last_point)
                 lstm.register_hand_lost()
                 lstm_display = lstm.get_overlay_label()
@@ -297,6 +306,17 @@ def main():
                 print(
                     "Puzzle mode "
                     f"{'ON — LSTM predicting' if puzzle_gate.active else 'OFF — LSTM idle'}"
+                )
+            if key == ord("h"):
+                hand_roles.swap(source="keyboard")
+                # The buffered sequence belongs to the other hand and is now
+                # mirrored differently — keeping it would blend two chiralities.
+                lstm.flush()
+                reset_last_point(last_point)
+                print(
+                    f"Hand roles swapped — ACTION (grab/cursor/LSTM) = "
+                    f"{hand_roles.action_hand.upper()}, "
+                    f"MOVE = {hand_roles.move_hand.upper()}"
                 )
     finally:
         cap.release()

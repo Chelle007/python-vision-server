@@ -41,6 +41,23 @@ LSTM_ACTION_MAX_HOLD_S = 1.0
 # Off at startup: Unity opens it per puzzle; P toggles it by hand for testing.
 PUZZLE_GATE_DEFAULT_ACTIVE = False
 
+# Which physical hand plays the ACTION role (grab / cursor / LSTM). The other
+# hand plays the MOVE role. See hand_roles.py — the payload keys stay
+# left*/right* so Unity needs no change; only which hand fills them moves.
+ACTION_HAND_DEFAULT = "right"
+# The LSTM is trained on right-hand clips only. When the action hand is the
+# left one, mirror its landmarks (x -> 1-x) so the model sees right-hand
+# geometry. Set False to feed raw left-hand landmarks (worse, but useful for
+# comparing against a model retrained on both hands).
+MIRROR_LEFT_HAND_FOR_LSTM = True
+# Mirroring also reverses on-screen rotation direction, so a physically
+# clockwise left-hand turn classifies as CCW. Swap the pair back afterwards so
+# a class means the same screen motion for either hand.
+LSTM_MIRRORED_CLASS_SWAP = {
+    "Turn_Around_CW": "Turn_Around_CCW",
+    "Turn_Around_CCW": "Turn_Around_CW",
+}
+
 MODEL_PATH = "models/escape_gestures.keras"
 DATA_DIR = "data"
 
