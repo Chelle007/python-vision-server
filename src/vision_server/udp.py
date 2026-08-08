@@ -9,11 +9,14 @@ def create_udp_socket() -> socket.socket:
 
 
 def default_payload() -> dict:
-    """Default data sent to Unity every frame (same keys as original server)."""
+    """Default data sent to Unity every frame.
+
+    The v1 single-hand fields (``hand_x``/``hand_y``/``hand_up``/``openPalm``/
+    ``isFist`` and the always-empty top-level ``landmarks``) were removed once
+    the left/right split landed — nothing on either side read them any more.
+    Cursor position now travels as ``palmX``/``palmY``.
+    """
     return {
-        "hand_x": 0.5,
-        "hand_y": 0.5,
-        "hand_up": False,
         "head_yaw": 0.0,
         "head_pitch": 0.0,
         "head_pitch_raw": 0.0,
@@ -32,9 +35,6 @@ def default_payload() -> dict:
         "rightPeace": False,
         "watchTap": False,
         "watchTapDistance": None,
-        "landmarks": [],
-        "openPalm": False,
-        "isFist": False,
         "fistRotX": 0.0,
         "fistRotY": 0.0,
         "fistRotZ": 0.0,

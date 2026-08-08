@@ -489,14 +489,12 @@ class PlayerLock:
         )
 
     def _hand_ok(self, hand: HandCandidate) -> bool:
+        # Deliberately silent: this runs per hand per frame, and a bystander
+        # standing in shot made it a continuous print() inside the capture loop.
         if self._face_center is None:
             return False
         scale = max(self._face_width, 1e-6)
-        reach = _dist(hand.center, self._face_center) / scale
-        if reach > HAND_TO_FACE_REACH:
-            _log(f"reject hand reach={reach:.2f}")
-            return False
-        return True
+        return _dist(hand.center, self._face_center) / scale <= HAND_TO_FACE_REACH
 
     def _reset_hand_tracks(self) -> None:
         self._left_center = None
@@ -539,16 +537,17 @@ class PlayerLock:
     def _match_hands(
         self, hands: list[HandCandidate], now: float
     ) -> tuple[HandCandidate | None, HandCandidate | None, bool]:
+        # Seeding filters through _hand_ok itself, so do not pay for it twice.
+        if self._left_center is None and self._right_center is None:
+            left, right = self._seed_hands(hands)
+            self._commit_seeded_hands(left, right)
+            return left, right, False
+
         ok = [h for h in hands if self._hand_ok(h)]
         face = self._face_center or (0.5, 0.5)
         scale = max(self._face_width, 1e-6)
         expected = self._expected_hand_length()
         flush = False
-
-        if self._left_center is None and self._right_center is None:
-            left, right = self._seed_hands(hands)
-            self._commit_seeded_hands(left, right)
-            return left, right, False
 
         left = right = None
 

@@ -156,71 +156,23 @@ class LatestFrameCamera:
     def _update(self) -> None:
         soft_fails = 0
         while not self._stopped:
-            with self._lock:
-                cap = self._cap
-            if cap is None or not cap.isOpened():
+            try:
+                soft_fails = self._update_once(soft_fails)
+            except Exception as exc:
+                # Without this the thread dies on the first raised error and the
+                # soft-retry/reopen path below never runs — the one failure mode
+                # that actually kills a run was the one bypassing recovery.
+                print(
+                    f"[cam] grab raised {type(exc).__name__}: {exc} — reopening"
+                )
                 with self._lock:
                     self._recovering = True
-                    self._last_event = "device_not_open"
+                    self._last_event = f"grab_raised_{type(exc).__name__}"
                     self._fail_grab_at = time.monotonic()
-                    # Keep last good frame if any; do not mark grab dead forever.
                     self._lock.notify_all()
+                soft_fails = 0
                 if not self._reopen():
                     time.sleep(CAMERA_REOPEN_SLEEP_S)
-                soft_fails = 0
-                continue
-
-            grabbed, frame = cap.read()
-            if self._stopped:
-                break
-
-            if grabbed and frame is not None:
-                soft_fails = 0
-                with self._lock:
-                    self._frame = frame
-                    self._grabbed = True
-                    self._frame_id += 1
-                    self._recovering = False
-                    if self._last_event not in (None, "ok"):
-                        print(
-                            f"[cam] stream recovered "
-                            f"(frame_id={self._frame_id}, "
-                            f"reopens={self._reopen_count})"
-                        )
-                    self._last_event = "ok"
-                    self._lock.notify_all()
-                continue
-
-            # Soft failure: device may still report isOpened=True.
-            soft_fails += 1
-            now = time.monotonic()
-            with self._lock:
-                device_open = self._device_open()
-                self._fail_grab_at = now
-                self._recovering = True
-                self._last_event = (
-                    "grab_failed_device_still_open"
-                    if device_open
-                    else "grab_failed_device_closed"
-                )
-                # Leave last good frame available; only wait for a *new* frame.
-                self._lock.notify_all()
-
-            print(
-                "[cam] grab failed (soft): "
-                f"src={self._src} "
-                f"frame_id={self._frame_id} "
-                f"device_open={device_open} "
-                f"soft_fail={soft_fails}/{CAMERA_SOFT_RETRIES} "
-                f"uptime_s={now - self._started_at:.1f}"
-            )
-
-            if soft_fails < CAMERA_SOFT_RETRIES:
-                time.sleep(CAMERA_SOFT_RETRY_SLEEP_S)
-                continue
-
-            soft_fails = 0
-            self._reopen()
 
         with self._lock:
             if self._last_event is None or self._last_event == "ok":
@@ -228,13 +180,75 @@ class LatestFrameCamera:
             self._recovering = False
             self._lock.notify_all()
 
+    def _update_once(self, soft_fails: int) -> int:
+        """One drain iteration. Returns the updated consecutive-soft-fail count."""
+        with self._lock:
+            cap = self._cap
+        if cap is None or not cap.isOpened():
+            with self._lock:
+                self._recovering = True
+                self._last_event = "device_not_open"
+                self._fail_grab_at = time.monotonic()
+                # Keep last good frame if any; do not mark grab dead forever.
+                self._lock.notify_all()
+            if not self._reopen():
+                time.sleep(CAMERA_REOPEN_SLEEP_S)
+            return 0
+
+        grabbed, frame = cap.read()
+        if self._stopped:
+            return soft_fails
+
+        if grabbed and frame is not None:
+            with self._lock:
+                self._frame = frame
+                self._grabbed = True
+                self._frame_id += 1
+                self._recovering = False
+                if self._last_event not in (None, "ok"):
+                    print(
+                        f"[cam] stream recovered "
+                        f"(frame_id={self._frame_id}, "
+                        f"reopens={self._reopen_count})"
+                    )
+                self._last_event = "ok"
+                self._lock.notify_all()
+            return 0
+
+        # Soft failure: device may still report isOpened=True.
+        soft_fails += 1
+        now = time.monotonic()
+        with self._lock:
+            device_open = self._device_open()
+            self._fail_grab_at = now
+            self._recovering = True
+            self._last_event = (
+                "grab_failed_device_still_open"
+                if device_open
+                else "grab_failed_device_closed"
+            )
+            # Leave last good frame available; only wait for a *new* frame.
+            self._lock.notify_all()
+
+        print(
+            "[cam] grab failed (soft): "
+            f"src={self._src} "
+            f"frame_id={self._frame_id} "
+            f"device_open={device_open} "
+            f"soft_fail={soft_fails}/{CAMERA_SOFT_RETRIES} "
+            f"uptime_s={now - self._started_at:.1f}"
+        )
+
+        if soft_fails < CAMERA_SOFT_RETRIES:
+            time.sleep(CAMERA_SOFT_RETRY_SLEEP_S)
+            return soft_fails
+
+        self._reopen()
+        return 0
+
     def isOpened(self) -> bool:
         """True while the reader is active (even mid-reconnect)."""
-        return (
-            not self._stopped
-            and self._thread is not None
-            and self._thread.is_alive()
-        )
+        return not self._stopped and self._drain_alive()
 
     def diagnostics(self) -> dict[str, Any]:
         """Snapshot for crash/audit logs when a read fails."""
@@ -272,12 +286,17 @@ class LatestFrameCamera:
     def read(self) -> tuple[bool, Optional[np.ndarray]]:
         """Block until a new frame, then return a copy (safe for drawing).
 
-        Returns ``(False, None)`` only after ``release()`` / stop. While the
-        camera is recovering, this waits for the next good frame instead of
-        treating a transient glitch as fatal.
+        Returns ``(False, None)`` after ``release()`` / stop, or if the drain
+        thread is gone. While the camera is recovering, this waits for the next
+        good frame instead of treating a transient glitch as fatal.
+
+        The thread-liveness check is the backstop for the guard in ``_update``:
+        only ``release()`` sets ``_stopped``, so a dead drain thread would
+        otherwise leave this looping on a 0.5s wait forever — a silent freeze
+        with no error, rather than a clean exit the caller can report.
         """
         with self._lock:
-            while not self._stopped:
+            while not self._stopped and self._drain_alive():
                 if (
                     self._grabbed
                     and self._frame is not None
@@ -287,6 +306,9 @@ class LatestFrameCamera:
                     return True, self._frame.copy()
                 self._lock.wait(timeout=0.5)
             return False, None
+
+    def _drain_alive(self) -> bool:
+        return self._thread is not None and self._thread.is_alive()
 
     def release(self) -> None:
         with self._lock:

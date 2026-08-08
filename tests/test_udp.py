@@ -6,9 +6,6 @@ from vision_server.udp import default_payload
 def test_default_payload_has_unity_keys():
     data = default_payload()
     expected_keys = {
-        "hand_x",
-        "hand_y",
-        "hand_up",
         "head_yaw",
         "head_pitch",
         "head_pitch_raw",
@@ -27,9 +24,6 @@ def test_default_payload_has_unity_keys():
         "rightPeace",
         "watchTap",
         "watchTapDistance",
-        "landmarks",
-        "openPalm",
-        "isFist",
         "fistRotX",
         "fistRotY",
         "fistRotZ",
@@ -66,3 +60,10 @@ def test_default_payload_types():
     # Gate ships closed so Unity, not the payload default, opens it per puzzle.
     assert data["puzzle_active"] is False
     assert data["puzzle_gate_source"] == "default"
+
+
+def test_v1_single_hand_fields_are_gone():
+    """Superseded by the left/right split; Unity reads palmX/palmY instead."""
+    data = default_payload()
+    for key in ("hand_x", "hand_y", "hand_up", "openPalm", "isFist", "landmarks"):
+        assert key not in data

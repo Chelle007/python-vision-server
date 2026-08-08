@@ -8,10 +8,11 @@ from vision_server.config import (
     CAMERA_FPS,
     CAMERA_HEIGHT,
     CAMERA_WIDTH,
+    FACE_MESH_EVERY_N,
     FRAME_SLOW_MS,
     MAX_NUM_FACES,
-    MEDIAPIPE_INPUT_SCALE,
     MAX_NUM_HANDS,
+    SHOW_PREVIEW,
     UDP_IP,
     UDP_PORT,
 )
@@ -100,10 +101,16 @@ def main():
         f"Camera negotiated: {cam_w}x{cam_h} @ {cam_fps:.0f} fps "
         f"(requested {CAMERA_WIDTH}x{CAMERA_HEIGHT} @ {CAMERA_FPS})"
     )
-    print("Press Q to quit.  Press C to recalibrate look pitch neutral.")
-    print("Press P to toggle puzzle mode (LSTM inference) — starts OFF.")
+    if SHOW_PREVIEW:
+        print("Press Q to quit.  Press C to recalibrate look pitch neutral.")
+        print("Press P to toggle puzzle mode (LSTM inference) — starts OFF.")
+    else:
+        print("Headless (SHOW_PREVIEW=False): no preview window, no keys.")
+        print("Press Ctrl-C to quit. Unity drives the puzzle gate.")
 
     last_point = [-1.0, -1.0]
+    frame_index = 0
+    last_faces = []
 
     try:
         while cap.isOpened():
@@ -130,17 +137,6 @@ def main():
 
             frame = cv2.flip(frame, 1)
             rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            if MEDIAPIPE_INPUT_SCALE != 1.0:
-                # Landmarks come back normalised, so drawing, PlayerLock, the
-                # LSTM and the UDP payload all keep working off `frame` at full
-                # size — only the pixels MediaPipe scans get smaller.
-                rgb = cv2.resize(
-                    rgb,
-                    None,
-                    fx=MEDIAPIPE_INPUT_SCALE,
-                    fy=MEDIAPIPE_INPUT_SCALE,
-                    interpolation=cv2.INTER_AREA,
-                )
             t_prep = time.perf_counter()
 
             hand_results = hands.process(rgb)
@@ -151,13 +147,19 @@ def main():
             # slow `hands` stage can be told apart from a busy frame.
             hands_n = len(hand_results.multi_hand_landmarks or ())
 
-            face_results = face_mesh.process(rgb)
+            # Face mesh is a whole MediaPipe graph, but head pitch/tilt move far
+            # slower than hands. On skipped frames PlayerLock is fed the previous
+            # face so the seat is not seen as empty every other frame — its
+            # timeouts run on wall clock, so a one-frame-stale face is harmless.
+            if frame_index % FACE_MESH_EVERY_N == 0:
+                faces = collect_faces(face_mesh.process(rgb))
+                last_faces = faces
+            else:
+                faces = last_faces
+            frame_index += 1
             t_face = time.perf_counter()
 
-            lock = player_lock.update(
-                collect_faces(face_results),
-                collect_hands(hand_results),
-            )
+            lock = player_lock.update(faces, collect_hands(hand_results))
 
             data = default_payload()
             data["player_locked"] = lock.locked
@@ -178,9 +180,10 @@ def main():
                 left = lock.left
                 left_landmarks = left.landmarks
                 _append_hand_packet(data, left)
-                mp_draw.draw_landmarks(
-                    frame, left.mp_landmarks, mp_hands.HAND_CONNECTIONS
-                )
+                if SHOW_PREVIEW:
+                    mp_draw.draw_landmarks(
+                        frame, left.mp_landmarks, mp_hands.HAND_CONNECTIONS
+                    )
                 gestures = evaluate_hand_rules(left_landmarks)
                 data["leftFist"] = gestures["fist"]
                 data["leftOpenPalm"] = gestures["open_palm"]
@@ -192,9 +195,10 @@ def main():
                 right_landmarks = right.landmarks
                 right_hand_seen = True
                 _append_hand_packet(data, right)
-                mp_draw.draw_landmarks(
-                    frame, right.mp_landmarks, mp_hands.HAND_CONNECTIONS
-                )
+                if SHOW_PREVIEW:
+                    mp_draw.draw_landmarks(
+                        frame, right.mp_landmarks, mp_hands.HAND_CONNECTIONS
+                    )
                 gestures = evaluate_hand_rules(right_landmarks)
                 lstm.register_hand_seen()
                 data["rightFist"] = gestures["fist"]
@@ -206,12 +210,12 @@ def main():
                     data, right_landmarks, gestures, last_point
                 )
 
-                fist_rot_x, fist_rot_y, fist_rot_z = get_hand_rotation(
-                    right_landmarks
-                )
-                data["fistRotX"] = round(fist_rot_x, 3)
-                data["fistRotY"] = round(fist_rot_y, 3)
-                data["fistRotZ"] = round(fist_rot_z, 3)
+                # Keep the pitch/yaw/roll names across the call so the X/Y/Z
+                # mapping is readable here instead of only in geometry.py.
+                pitch, yaw, roll = get_hand_rotation(right_landmarks)
+                data["fistRotX"] = round(pitch, 3)
+                data["fistRotY"] = round(yaw, 3)
+                data["fistRotZ"] = round(roll, 3)
 
                 # Buffer keeps filling either way; only inference is gated.
                 t_lstm = time.perf_counter()
@@ -219,9 +223,7 @@ def main():
                     right_landmarks, infer=puzzle_gate.active
                 )
                 lstm_ms = (time.perf_counter() - t_lstm) * 1000.0
-                data["lstm_gesture"] = (
-                    lstm_display if lstm_display in lstm.classes else "Idle"
-                )
+                data["lstm_gesture"] = lstm.clamp_label(lstm_display)
 
             if apply_watch_tap_fields(data, left_landmarks, right_landmarks):
                 reset_last_point(last_point)
@@ -231,9 +233,7 @@ def main():
                 reset_last_point(last_point)
                 lstm.register_hand_lost()
                 lstm_display = lstm.get_overlay_label()
-                data["lstm_gesture"] = (
-                    lstm_display if lstm_display in lstm.classes else "Idle"
-                )
+                data["lstm_gesture"] = lstm.clamp_label(lstm_display)
 
             if lock.face is not None:
                 apply_head_rules(lock.face, data)
@@ -241,24 +241,26 @@ def main():
             else:
                 pitch_cal.apply_to_payload(data, None)
 
-            overlay_lines = build_overlay_lines(data, lstm_display)
-            draw_overlay(frame, overlay_lines)
-            draw_pitch_indicator(frame, data.get("head_pitch", 0.0))
-            draw_lock_ring(
-                frame,
-                status=lock.status,
-                center=lock.ring_center,
-                ring_size=lock.ring_size,
-                progress=lock.progress,
-            )
+            # Send before drawing: Unity should not wait on the debug preview.
             send_payload(sock, data)
             t_send = time.perf_counter()
 
-            # imshow + waitKey drive the macOS HighGUI event loop, which is
-            # neither free nor needed by Unity — this is the debug preview.
-            cv2.imshow("Combined Hand + Face Tracker", frame)
-
-            key = cv2.waitKey(1) & 0xFF
+            # Everything below is the debug preview — drawing, the macOS HighGUI
+            # event loop, and the keyboard. None of it is needed by Unity.
+            key = 0xFF
+            if SHOW_PREVIEW:
+                overlay_lines = build_overlay_lines(data, lstm_display)
+                draw_overlay(frame, overlay_lines)
+                draw_pitch_indicator(frame, data.get("head_pitch", 0.0))
+                draw_lock_ring(
+                    frame,
+                    status=lock.status,
+                    center=lock.ring_center,
+                    ring_size=lock.ring_size,
+                    progress=lock.progress,
+                )
+                cv2.imshow("Combined Hand + Face Tracker", frame)
+                key = cv2.waitKey(1) & 0xFF
             t_show = time.perf_counter()
 
             # Perf guard: a stalled frame is a compute problem, not a camera
@@ -298,6 +300,8 @@ def main():
                     "Puzzle mode "
                     f"{'ON — LSTM predicting' if puzzle_gate.active else 'OFF — LSTM idle'}"
                 )
+    except KeyboardInterrupt:
+        print("\nInterrupted — shutting down.")
     finally:
         cap.release()
         sock.close()
