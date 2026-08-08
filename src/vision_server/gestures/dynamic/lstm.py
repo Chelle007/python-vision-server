@@ -85,6 +85,10 @@ class GestureLSTM:
         """Label for on-screen HUD. Buffer warmup is silent Idle."""
         return self.last_output
 
+    def clamp_label(self, label: str) -> str:
+        """Only real model classes reach Unity; "No Model" etc. become Idle."""
+        return label if label in self.classes else "Idle"
+
     def _apply_action_hold(self, raw_label: str) -> str:
         """Cap non-Idle outputs so one-shots do not stick after the motion."""
         now = time.monotonic()
@@ -130,8 +134,11 @@ class GestureLSTM:
         if len(self.frame_buffer) < self.buffer_size:
             return self.last_output
 
-        input_data = np.array([list(self.frame_buffer)])
-        prediction = self.model.predict(input_data, verbose=0)
+        # predict() rebuilds a data adapter and epoch iterator on every call —
+        # 30ms for this model vs 1.1ms for predict_on_batch on the same input.
+        # Batch-of-one inference must never go through predict().
+        input_data = np.array([list(self.frame_buffer)], dtype="float32")
+        prediction = self.model.predict_on_batch(input_data)
 
         class_id = int(np.argmax(prediction))
         confidence = float(prediction[0][class_id])

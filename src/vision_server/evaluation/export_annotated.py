@@ -133,12 +133,10 @@ def export_annotated_video(
                         data["rightIndexUp"] = gestures["index_up"]
                         data["rightPeace"] = gestures["peace"]
                         apply_cursor_fields(data, landmarks, gestures, last_point)
-                        fist_rot_x, fist_rot_y, fist_rot_z = get_hand_rotation(
-                            landmarks
-                        )
-                        data["fistRotX"] = round(fist_rot_x, 3)
-                        data["fistRotY"] = round(fist_rot_y, 3)
-                        data["fistRotZ"] = round(fist_rot_z, 3)
+                        pitch, yaw, roll = get_hand_rotation(landmarks)
+                        data["fistRotX"] = round(pitch, 3)
+                        data["fistRotY"] = round(yaw, 3)
+                        data["fistRotZ"] = round(roll, 3)
                         lstm_display = lstm.predict(landmarks)
                         data["lstm_gesture"] = (
                             lstm_display if lstm_display in lstm.classes else "Idle"
