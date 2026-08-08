@@ -48,7 +48,7 @@ def _lock_status_label(status: str, lock_id: int) -> tuple[str, tuple[int, int, 
     return "NO PLAYER LOCK", (160, 160, 160)
 
 
-def _pitch_cal_message(status: str, neutral: float) -> tuple[str, tuple[int, int, int]] | None:
+def _pitch_cal_message(status: str) -> tuple[str, tuple[int, int, int]] | None:
     # OpenCV putText is ASCII-only; avoid em-dash / unicode (shows as ???).
     if status == "idle":
         return None
@@ -77,10 +77,7 @@ def build_overlay_lines(data: dict, lstm_display: str) -> list[tuple[str, tuple[
     status = data.get("lock_status", "unlocked")
     overlay_lines.append(_lock_status_label(status, data.get("lock_id", 0)))
 
-    cal_msg = _pitch_cal_message(
-        str(data.get("pitch_cal_status", "idle")),
-        float(data.get("pitch_cal_neutral", 0.0)),
-    )
+    cal_msg = _pitch_cal_message(str(data.get("pitch_cal_status", "idle")))
     if cal_msg is not None:
         overlay_lines.append(cal_msg)
 

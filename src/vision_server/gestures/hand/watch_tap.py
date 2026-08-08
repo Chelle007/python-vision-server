@@ -38,8 +38,6 @@ def _clear_solo_hand_gestures(data: dict) -> None:
     data["rightOpenPalm"] = False
     data["rightIndexUp"] = False
     data["rightPeace"] = False
-    data["openPalm"] = False
-    data["isFist"] = False
     data["fistRotX"] = 0.0
     data["fistRotY"] = 0.0
     data["fistRotZ"] = 0.0

@@ -18,6 +18,11 @@ CAMERA_REOPEN_SLEEP_S = 0.4
 # A frame at or above this counts as stalled, reported as `slow=N` in the
 # [perf] line. ~33ms is one frame at 30fps, so 100ms means the loop lost 3.
 FRAME_SLOW_MS = 100.0
+# Debug preview window. Unity receives everything over UDP and never reads this
+# window, so on the demo machine every landmark circle, overlay line and the
+# macOS HighGUI event loop is pure waste. False also disables the Q/C/P keys
+# (they come from cv2.waitKey) — quit with Ctrl-C instead.
+SHOW_PREVIEW = True
 # Periodic percentile summary, seconds between lines. 0 disables it.
 FRAME_STATS_INTERVAL_S = 5.0
 
@@ -49,12 +54,15 @@ MEDIAPIPE_MIN_TRACKING_CONFIDENCE = 0.7
 # Hand model: 0 = lite (~2x faster, slightly coarser landmarks), 1 = full.
 # Raise to 1 on a machine with CPU headroom (e.g. the demo laptop).
 MEDIAPIPE_HAND_MODEL_COMPLEXITY = 0
-# Run inference on a downscaled copy; capture and display stay full size.
-# Left at 1.0 (off) on purpose: benchmarking showed 320x240 and 640x480 cost
-# the SAME (~20ms), because MediaPipe resizes to its model's fixed input size
-# (~192x192) internally. Downscaling here only loses distant hands and adds a
-# resize. Kept configurable so the measurement does not get redone from scratch.
-MEDIAPIPE_INPUT_SCALE = 1.0
+# NOTE: downscaling the frame before MediaPipe does NOT help. Benchmarking
+# showed 320x240 and 640x480 cost the SAME (~20ms), because MediaPipe resizes
+# to its model's fixed input size (~192x192) internally. Recorded here so the
+# measurement does not get redone from scratch.
+
+# Run the face mesh on every Nth frame and reuse the previous face in between.
+# Head pitch and tilt are slow signals, so 15Hz is ample, and the face mesh is
+# a whole MediaPipe graph per frame. 1 disables the skipping.
+FACE_MESH_EVERY_N = 2
 
 MAX_NUM_FACES = 2
 # 4 is deliberate: PlayerLock needs to SEE bystanders' hands in order to reject
