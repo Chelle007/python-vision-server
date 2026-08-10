@@ -35,14 +35,30 @@ def is_watch_tap(watch_landmarks, pointer_landmarks) -> bool:
 
 
 def _clear_solo_hand_gestures(data: dict) -> None:
+    """Blank the one-hand gesture fields while a two-hand tap owns both hands.
+
+    ``*GestureRaw`` is left alone on purpose: it reports what the classifier
+    saw, and a capture is more useful if it still shows the poses the hands
+    were actually in during the tap.
+    """
     data["leftFist"] = False
     data["leftOpenPalm"] = False
     data["leftIndexUp"] = False
     data["leftPeace"] = False
+    data["leftThumbsUp"] = False
+    data["leftRockSign"] = False
+    data["leftIndexLeft"] = False
+    data["leftIndexRight"] = False
     data["rightFist"] = False
     data["rightOpenPalm"] = False
     data["rightIndexUp"] = False
     data["rightPeace"] = False
+    data["rightThumbsUp"] = False
+    data["rightRockSign"] = False
+    data["rightIndexLeft"] = False
+    data["rightIndexRight"] = False
+    data["moveGesture"] = "none"
+    data["actionGesture"] = "none"
     data["fistRotX"] = 0.0
     data["fistRotY"] = 0.0
     data["fistRotZ"] = 0.0

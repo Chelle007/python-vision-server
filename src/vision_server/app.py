@@ -12,15 +12,26 @@ from vision_server.config import (
     FRAME_SLOW_MS,
     MAX_NUM_FACES,
     MAX_NUM_HANDS,
+    MOVE_GESTURE_OVERRIDES,
     SHOW_PREVIEW,
     UDP_IP,
     UDP_PORT,
 )
 from vision_server.gestures.dynamic import GestureLSTM
-from vision_server.gestures.hand import HAND_RULES
+from vision_server.gestures.hand import (
+    NONE,
+    GestureDebouncer,
+    classify_hand,
+    rules_from_label,
+)
 from vision_server.gestures.hand.cursor_fields import (
     apply_cursor_fields,
     reset_last_point,
+)
+from vision_server.gestures.hand.fingers import (
+    hand_frame,
+    thumb_clearance,
+    thumb_reach,
 )
 from vision_server.gestures.hand.geometry import get_hand_rotation
 from vision_server.gestures.hand.watch_tap import apply_watch_tap_fields
@@ -46,10 +57,6 @@ from vision_server.tracking import (
 from vision_server.udp import create_udp_socket, default_payload, send_payload
 
 
-def evaluate_hand_rules(landmarks) -> dict[str, bool]:
-    return {name: fn(landmarks) for name, fn in HAND_RULES}
-
-
 def apply_head_rules(face_landmarks, data: dict) -> None:
     for _, fn in HEAD_RULES:
         result = fn(face_landmarks)
@@ -62,6 +69,28 @@ def _landmark_dicts(landmarks) -> list[dict]:
         {"x": round(lm.x, 4), "y": round(lm.y, 4), "z": round(lm.z, 4)}
         for lm in landmarks
     ]
+
+
+def _thumb_metrics(landmarks) -> tuple[float | None, float | None]:
+    """Diagnostic ``(clearance, reach)`` for one hand, in palm lengths.
+
+    These two are the whole fist/thumbs-up decision, so putting them in the
+    payload turns "the gesture will not fire" into a pair of readings that can
+    be compared against THUMB_UP_CLEARANCE / THUMB_UP_REACH on the spot.
+    """
+    if landmarks is None:
+        return None, None
+
+    frame = hand_frame(landmarks)
+    if frame is None:
+        return None, None
+
+    clearance = thumb_clearance(landmarks, frame)
+    reach = thumb_reach(landmarks, frame)
+    return (
+        None if clearance is None else round(clearance, 2),
+        None if reach is None else round(reach, 2),
+    )
 
 
 def _append_hand_packet(data: dict, hand) -> None:
@@ -93,6 +122,12 @@ def main():
     puzzle_gate = PuzzleGate()
     # Same deal: H swaps the hands today, Unity's settings screen later.
     hand_roles = HandRoles()
+    # One per role, never shared: the counters are per-hand state, and a single
+    # instance would let the MOVE hand's streak commit the ACTION hand's label.
+    # They also carry different thresholds — walking wants to start and stop
+    # immediately, sitting does not (see MOVE_GESTURE_OVERRIDES in config).
+    move_debounce = GestureDebouncer(MOVE_GESTURE_OVERRIDES)
+    action_debounce = GestureDebouncer()
     frame_stats = FrameStats()
 
     # Threaded reader drops stale buffered frames while MediaPipe runs.
@@ -183,46 +218,85 @@ def main():
             if lock.flush_lstm:
                 lstm.flush()
                 reset_last_point(last_point)
+                # The hand behind the gesture counters just changed identity —
+                # a held crouch must not survive into the new player's session.
+                move_debounce.reset()
+                action_debounce.reset()
 
-            action_hand_seen = False
             lstm_display = "Idle"
-            move_landmarks = None
-            action_landmarks = None
             # The payload keys stay left*/right*, but they carry ROLES, not
             # physical sides: left* = MOVE hand, right* = ACTION hand. Unity
             # therefore needs no change when the player swaps hands.
             move, action = hand_roles.split(lock)
             mirror = hand_roles.mirror_action_hand
+            action_hand_seen = action is not None
+            move_landmarks = move.landmarks if move is not None else None
+            action_landmarks = action.landmarks if action is not None else None
 
             if move is not None:
-                move_landmarks = move.landmarks
                 _append_hand_packet(data, move)
                 if SHOW_PREVIEW:
                     mp_draw.draw_landmarks(
                         frame, move.mp_landmarks, mp_hands.HAND_CONNECTIONS
                     )
-                gestures = evaluate_hand_rules(move_landmarks)
-                data["leftFist"] = gestures["fist"]
-                data["leftOpenPalm"] = gestures["open_palm"]
-                data["leftIndexUp"] = gestures["index_up"]
-                data["leftPeace"] = gestures["peace"]
 
             if action is not None:
-                action_landmarks = action.landmarks
-                action_hand_seen = True
                 _append_hand_packet(data, action)
                 if SHOW_PREVIEW:
                     mp_draw.draw_landmarks(
                         frame, action.mp_landmarks, mp_hands.HAND_CONNECTIONS
                     )
-                gestures = evaluate_hand_rules(action_landmarks)
-                lstm.register_hand_seen()
-                data["rightFist"] = gestures["fist"]
-                data["rightOpenPalm"] = gestures["open_palm"]
-                data["rightIndexUp"] = gestures["index_up"]
-                data["rightPeace"] = gestures["peace"]
 
-                apply_cursor_fields(data, action_landmarks, gestures, last_point)
+            # Classify each hand once, then let the commit delay decide what
+            # Unity actually sees. A missing hand is fed NONE rather than
+            # skipped, so a MediaPipe dropout has to outlast the off-count
+            # before it can end a held gesture — losing the hand for a frame
+            # used to stand a crouching player straight up.
+            move_label = move_debounce.update(
+                classify_hand(move_landmarks) if move_landmarks is not None else NONE
+            )
+            action_label = action_debounce.update(
+                classify_hand(action_landmarks)
+                if action_landmarks is not None
+                else NONE
+            )
+
+            move_gestures = rules_from_label(move_label)
+            data["leftFist"] = move_gestures["fist"]
+            data["leftOpenPalm"] = move_gestures["open_palm"]
+            data["leftIndexUp"] = move_gestures["index_up"]
+            data["leftPeace"] = move_gestures["peace"]
+            data["leftThumbsUp"] = move_gestures["thumbs_up"]
+            data["leftRockSign"] = move_gestures["rock_sign"]
+            data["leftIndexLeft"] = move_gestures["index_left"]
+            data["leftIndexRight"] = move_gestures["index_right"]
+            data["moveGesture"] = move_label
+            data["moveGestureRaw"] = move_debounce.raw
+            data["moveThumbClear"], data["moveThumbReach"] = _thumb_metrics(
+                move_landmarks
+            )
+
+            action_gestures = rules_from_label(action_label)
+            data["rightFist"] = action_gestures["fist"]
+            data["rightOpenPalm"] = action_gestures["open_palm"]
+            data["rightIndexUp"] = action_gestures["index_up"]
+            data["rightPeace"] = action_gestures["peace"]
+            data["rightThumbsUp"] = action_gestures["thumbs_up"]
+            data["rightRockSign"] = action_gestures["rock_sign"]
+            data["rightIndexLeft"] = action_gestures["index_left"]
+            data["rightIndexRight"] = action_gestures["index_right"]
+            data["actionGesture"] = action_label
+            data["actionGestureRaw"] = action_debounce.raw
+            data["actionThumbClear"], data["actionThumbReach"] = _thumb_metrics(
+                action_landmarks
+            )
+
+            if action is not None:
+                lstm.register_hand_seen()
+
+                # Debounced gestures, so a one-frame misread cannot warp the
+                # cursor by flipping the fist/index branch.
+                apply_cursor_fields(data, action_landmarks, action_gestures, last_point)
 
                 # Keep the pitch/yaw/roll names across the call so the X/Y/Z
                 # mapping is readable here instead of only in geometry.py.
@@ -244,6 +318,11 @@ def main():
             if apply_watch_tap_fields(data, move_landmarks, action_landmarks):
                 reset_last_point(last_point)
                 lstm_display = "Idle"
+                # A tap suppresses solo gestures; clearing the counters too
+                # means the player has to re-establish one afterwards rather
+                # than resuming whatever was committed before the tap.
+                move_debounce.reset()
+                action_debounce.reset()
 
             if not action_hand_seen:
                 reset_last_point(last_point)
@@ -322,6 +401,9 @@ def main():
                 # mirrored differently — keeping it would blend two chiralities.
                 lstm.flush()
                 reset_last_point(last_point)
+                # Each debouncer is now counting a different physical hand.
+                move_debounce.reset()
+                action_debounce.reset()
                 print(
                     f"Hand roles swapped — ACTION (grab/cursor/LSTM) = "
                     f"{hand_roles.action_hand.upper()}, "

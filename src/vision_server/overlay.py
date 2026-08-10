@@ -64,6 +64,20 @@ def _pitch_cal_message(status: str) -> tuple[str, tuple[int, int, int]] | None:
     return None
 
 
+def _gesture_debug_line(data: dict) -> str:
+    """``MOVE fist(fist)  ACT none(peace)`` — committed label, raw in brackets.
+
+    They differ exactly while a change is being counted out, so a bracket that
+    never gets promoted is a threshold set too high, and one that flickers
+    without moving the committed label is the filter doing its job.
+    """
+    move = str(data.get("moveGesture", "none"))
+    move_raw = str(data.get("moveGestureRaw", "none"))
+    action = str(data.get("actionGesture", "none"))
+    action_raw = str(data.get("actionGestureRaw", "none"))
+    return f"MOVE {move}({move_raw})  ACT {action}({action_raw})"
+
+
 def build_overlay_lines(data: dict, lstm_display: str) -> list[tuple[str, tuple[int, int, int]]]:
     overlay_lines = [
         (f"AI LSTM: {lstm_display}", lstm_display_color(lstm_display)),
@@ -97,6 +111,11 @@ def build_overlay_lines(data: dict, lstm_display: str) -> list[tuple[str, tuple[
     mv = str(data.get("move_hand", "left")).upper()
     ac = action_hand
 
+    # Raw classifier output next to the committed label. Without both, a
+    # gesture that fails to fire is indistinguishable from one the debouncer
+    # is still counting, and the frame thresholds cannot be tuned by eye.
+    overlay_lines.append((_gesture_debug_line(data), (170, 170, 170)))
+
     if data["leftFist"]:
         overlay_lines.append((f"{mv} FIST = MOVE", (0, 255, 0)))
 
@@ -105,6 +124,18 @@ def build_overlay_lines(data: dict, lstm_display: str) -> list[tuple[str, tuple[
 
     if data["leftPeace"]:
         overlay_lines.append((f"{mv} PEACE = CROUCH", (0, 255, 0)))
+
+    if data["leftThumbsUp"]:
+        overlay_lines.append((f"{mv} THUMBS UP = INVENTORY", (0, 255, 0)))
+
+    if data["leftRockSign"]:
+        overlay_lines.append((f"{mv} ROCK SIGN = NEXT ITEM", (0, 255, 0)))
+
+    if data["leftIndexRight"]:
+        overlay_lines.append((f"{mv} POINT RIGHT = NEXT ITEM", (0, 255, 0)))
+
+    if data["leftIndexLeft"]:
+        overlay_lines.append((f"{mv} POINT LEFT = PREV ITEM", (0, 255, 0)))
 
     if data["rightFist"]:
         overlay_lines.append((f"{ac} FIST = GRAB", (0, 255, 0)))

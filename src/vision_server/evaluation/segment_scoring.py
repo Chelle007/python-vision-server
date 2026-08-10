@@ -10,15 +10,28 @@ import cv2
 
 from vision_server.config import MODEL_PATH
 from vision_server.gestures.dynamic import GestureLSTM
-from vision_server.gestures.hand import HAND_RULES
+from vision_server.gestures.hand import (
+    NONE,
+    GestureDebouncer,
+    classify_hand,
+    rules_from_label,
+)
 from vision_server.gestures.hand.watch_tap import is_watch_tap
 from vision_server.tracking import create_hands
 
-# Labels that count toward static-gesture accuracy
+# Labels that count toward static-gesture accuracy. Keyed by the name used in
+# the clip annotations, so an entry with no annotated segments simply never
+# scores — the inventory gestures are listed ahead of the clips being recorded,
+# which is also what makes their miss rate measurable at all (they were
+# calibrated against false positives only; see THUMB_UP_CLEARANCE).
 STATIC_LABELS = {
     "leftFist": ("left", "fist"),
     "leftIndexUp": ("left", "index_up"),
     "leftPeace": ("left", "peace"),
+    "leftThumbsUp": ("left", "thumbs_up"),
+    "leftRockSign": ("left", "rock_sign"),
+    "leftIndexLeft": ("left", "index_left"),
+    "leftIndexRight": ("left", "index_right"),
     "rightFist": ("right", "fist"),
     "rightOpenPalm": ("right", "open_palm"),
 }
@@ -136,10 +149,6 @@ def default_labels_path_for_video(video_path: str | Path) -> Path | None:
     return candidate if candidate.is_file() else None
 
 
-def _rules_dict(landmarks) -> dict[str, bool]:
-    return {name: fn(landmarks) for name, fn in HAND_RULES}
-
-
 def score_video_segments(
     video_path: str | Path,
     labels_path: str | Path,
@@ -160,6 +169,10 @@ def score_video_segments(
     fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
     hands = create_hands(max_num_hands=2)
     lstm = GestureLSTM(model_path=model_path)
+    # Score the debounced labels, not the raw per-frame ones. The live server
+    # only ever sends debounced booleans to Unity, so scoring the raw rules
+    # here would measure a pipeline that does not exist.
+    debouncers = {"left": GestureDebouncer(), "right": GestureDebouncer()}
 
     # Per-segment accumulators
     stats: list[dict] = []
@@ -207,8 +220,16 @@ def score_video_segments(
                     else:
                         right = lms.landmark
 
-            left_g = _rules_dict(left) if left is not None else None
-            right_g = _rules_dict(right) if right is not None else None
+            # Missing hands feed NONE so a dropout has to outlast the
+            # off-count, exactly as in the live server.
+            left_label = debouncers["left"].update(
+                classify_hand(left) if left is not None else NONE
+            )
+            right_label = debouncers["right"].update(
+                classify_hand(right) if right is not None else NONE
+            )
+            left_g = rules_from_label(left_label)
+            right_g = rules_from_label(right_label)
             wt = is_watch_tap(left, right)
 
             lstm_label = "Idle"
