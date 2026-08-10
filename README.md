@@ -11,7 +11,7 @@ Python backend for **Gaming with Bare Hands** (CSIT321 FYP). Captures webcam inp
 | -------------------------------------- | ------------------------------------------------------------------- |
 | **MediaPipe Hands**                    | Tracks 21 landmarks per hand (up to 2 hands)                        |
 | **MediaPipe Face Mesh**                | Head yaw/pitch for camera control                                   |
-| **Hand heuristics** (`gestures/hand/`) | Static gestures — fist, open palm, index up, peace, rotation |
+| **Hand heuristics** (`gestures/hand/`) | Static gestures — fist, open palm, index up, peace, thumbs up, rock sign, rotation |
 | **Head heuristics** (`gestures/head/`) | Head orientation (yaw/pitch); extensible for nod/shake/tilt         |
 | **LSTM** (`gestures/dynamic/`)         | Dynamic gestures — Idle, Turn_Key, Pull_Lever, Turn_Around_CW/CCW |
 | **UDP**                                | Sends JSON every frame to Unity at `127.0.0.1:5052`                 |
@@ -231,9 +231,12 @@ Key fields teammates may use:
 | `head_yaw`, `head_pitch`               | float  | Orientation (−1…1); pitch is rest-relative after cal (neg = look up) |
 | `head_pitch_raw`, `pitch_calibrated`, `pitch_cal_status`, `pitch_cal_neutral` | debug | Raw pitch + cal state (Unity can ignore) |
 | `tilt_left`, `tilt_right`              | bool   | Head roll L/R; hold-to-turn, or snap 180° if looking up |
-| `leftFist`, `leftIndexUp`, `leftPeace` | bool   | Left-hand movement                     |
+| `leftFist`, `leftIndexUp`, `leftPeace` | bool   | Left-hand movement. `leftIndexUp` (jump) now requires pointing **up** — sideways is next/prev below |
+| `leftThumbsUp`, `leftRockSign`         | bool   | Inventory open / next item — one-shots, read the **rising edge** |
+| `leftIndexLeft`, `leftIndexRight`      | bool   | Point left / right — inventory prev / next. Also one-shots; direction is screen-relative |
 | `rightFist`, `rightOpenPalm`           | bool   | Right-hand interaction                 |
 | `rightIndexUp`                         | bool   | Right-hand index up (e.g. stand from sit) |
+| `rightThumbsUp`, `rightRockSign`       | bool   | Same two gestures on the action hand (sent for symmetry; unused so far) |
 | `palmX`, `palmY`                       | float  | Right palm screen position             |
 | `fistRotX/Y/Z`                         | float  | Right-hand rotation (inspect)          |
 | `lstm_gesture`                         | string | `Idle`, `Turn_Key`, `Pull_Lever`, `Turn_Around_CW`, `Turn_Around_CCW` |

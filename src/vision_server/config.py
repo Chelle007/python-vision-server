@@ -128,6 +128,82 @@ FINGER_CURL_MARGIN = 0.10
 # than by the thumb.
 THUMB_SPREAD_RATIO = 0.6
 
+# --- Thumbs-up (inventory open) -------------------------------------------
+# A thumbs-up has the same four-finger pattern as a fist, so the thumb splits
+# them: distance from the thumb tip to the nearest curled fingertip, in palm
+# lengths (see fingers.thumb_clearance). With the fingers balled, a tucked
+# thumb is physically resting on them and a raised one is out in clear air, so
+# the question is simply "is the thumb out", with no reference to which way it
+# points.
+#
+# That framing matters more than the number. Two earlier versions measured
+# thumb DIRECTION against the hand's wrist -> knuckles axis, and both read
+# obvious thumbs-ups as fists: the gesture is normally made with the fist
+# rolled sideways, which leaves the thumb near-perpendicular to that axis and
+# drives any angular measure toward the fist end of its range. Distance between
+# two landmarks has no such failure mode.
+#
+# Clearance alone is not enough, and the reason is worth recording: the
+# spurious triggers do NOT come from the gripping clips as expected, they come
+# overwhelmingly from Idle (4.4/min vs 0-1/min for Turn_Key and Pull_Lever). A
+# hand at rest holds its fingers loosely curled with the thumb lying naturally
+# apart from them, which is clearance without a thumbs-up — and a resting hand
+# is exactly what the MOVE hand does most of the time. So the thumb must also
+# be EXTENDED, not merely apart. See fingers.thumb_reach.
+#
+# On the 11.5k fist-pattern frames in data/ (well-measured hands only, see
+# THUMB_UP_MIN_PALM) a fist sits at clearance p50 = 0.21 / p95 = 0.55 and reach
+# p50 = 0.71, against roughly 0.8 clearance and 1.1-1.4 reach extended.
+#
+# Spurious RISING EDGES — inventory pop-opens — over the 19.2 min of recorded
+# gameplay, since one edge is one wrong menu. The hold below is the third term
+# and the cheapest of the three, because a deliberate gesture is held for
+# roughly a second while idle noise is transient:
+#
+#   clearance/reach   on=4   on=6   on=8     (spurious opens per minute)
+#   0.60 / 0.95       0.99   0.52   0.47
+#   0.70 / 0.95       0.57   0.36   0.31   <- chosen, ~1 per 3.2 min
+#   0.70 / 1.05       0.57   0.36   0.21
+#
+# Reach is kept deliberately loose. It is worth about a third of the remaining
+# false positives (8 -> 6 edges at on=8) and tightening it to 1.05 would halve
+# them again, but a real thumbs-up measures around 1.0-1.4 and the low end of
+# that is too close to 1.05 to spend the recall on.
+#
+# CAVEAT: the corpus contains no thumbs-up recordings, so all of this is
+# calibrated against false positives ONLY. scripts/calibrate_thumbs_up.py
+# measures both sides against your own hand; the live overlay prints both
+# numbers on every fist-pattern frame, which is the quickest way to see where
+# yours land.
+THUMB_UP_CLEARANCE = 0.70
+THUMB_UP_REACH = 0.95
+
+# --- Pointing (inventory next / back) --------------------------------------
+# One extended index used to be a single gesture. It is now three, split by
+# where the finger points in SCREEN space (see fingers.index_direction): up is
+# jump, left and right step the inventory selection.
+#
+# The value is a cosine, so it defines a cone half-angle: 0.80 is ~37 degrees
+# either side of each axis. It MUST stay above cos(45 degrees) = 0.707, or the
+# up and sideways cones overlap and a diagonal point satisfies both.
+#
+# Measured on the 6.6k index-up frames in data/, all of them genuine jumps:
+# they point firmly up (vert p50 = +0.99, p5 = +0.70), so the split is nearly
+# free. At 0.80, 92.1% still read as up, 3.8% land sideways and 4.0% fall in
+# the dead zone between cones. Loosening to 0.70 keeps 95% as up but removes
+# the dead zone entirely; tightening to 0.85 drops jump recall to 89.5% for
+# little gain.
+#
+# NOTE this is a real behaviour change for jump: an index pointing sideways
+# used to fire it and now does not.
+INDEX_POINT_CONE = 0.80
+# hand_frame only rejects a hand with NO measurable axis (0.02), which leaves
+# badly foreshortened hands whose small palm length inflates every ratio
+# divided by it — on the corpus those frames are the whole tail, reaching an
+# impossible 5.8 palm lengths. Below this, the hand stays a fist rather than
+# being judged on unreliable geometry. 0.08 keeps 86% of recorded frames.
+THUMB_UP_MIN_PALM = 0.08
+
 # Commit delay per gesture, in consecutive frames (see hand/debounce.py).
 # Asymmetric on purpose:
 #   on  = frames needed to START the gesture — high for one-shots, so a pose
@@ -141,6 +217,18 @@ HAND_GESTURE_ON_FRAMES = {
     "peace": 2,
     "open_palm": 2,
     "index_up": 3,
+    # Both are UI one-shots (open inventory / next slot), so they enter slowly:
+    # nobody notices a quarter-second of latency opening a menu. For thumbs_up
+    # the hold is a first-class part of the detection rather than just filter
+    # hygiene — see THUMB_UP_CLEARANCE. 8 frames is ~260ms against the ~1s a
+    # player actually holds the pose, and it is the cheapest of the three terms
+    # because it costs latency instead of recall.
+    "thumbs_up": 8,
+    "rock_sign": 3,
+    # Same one-shot reasoning as rock_sign, and they share its exposure to a
+    # finger sweeping past on the way somewhere else.
+    "index_left": 3,
+    "index_right": 3,
     "none": 1,
 }
 HAND_GESTURE_OFF_FRAMES = {
@@ -148,6 +236,12 @@ HAND_GESTURE_OFF_FRAMES = {
     "peace": 5,
     "open_palm": 3,
     "index_up": 2,
+    # Held while the menu is read, and dropping out of thumbs_up on the MOVE
+    # hand lands back on fist = walk forward, so releasing is worth delaying.
+    "thumbs_up": 4,
+    "rock_sign": 3,
+    "index_left": 3,
+    "index_right": 3,
     # Leaving "no gesture" is governed purely by the incoming gesture's on-count.
     "none": 0,
 }

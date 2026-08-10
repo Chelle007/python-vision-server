@@ -42,7 +42,11 @@ FINGERS = tuple(FINGER_JOINTS)
 
 _WRIST = 0
 _MIDDLE_MCP = 9
+_THUMB_CMC = 1
 _THUMB_TIP = 4
+_INDEX_MCP = 5
+_INDEX_TIP = 8
+_FINGERTIPS = (8, 12, 16, 20)
 _PALM_POINTS = (0, 5, 9, 13, 17)
 
 # Below this the palm has no measurable length in image space, which happens
@@ -120,6 +124,98 @@ def finger_states(landmarks, frame=None) -> dict[str, bool | None] | None:
             states[name] = None
 
     return states
+
+
+def index_direction(landmarks) -> tuple[float, float] | None:
+    """Unit ``(horiz, vert)`` the index finger points, in SCREEN coordinates.
+
+    ``horiz`` is +1 pointing screen-right, ``vert`` is +1 pointing screen-up.
+
+    Screen space is deliberate, and it is the one measurement in this module
+    that is not taken in the hand's own frame. Everything else here answers
+    "what shape is the hand", which must survive the wrist being rolled — but
+    "point left" is a statement about the room, not about the hand, and a
+    player who rolls their wrist while pointing left still means left. Reading
+    it in the hand frame would make the answer depend on the wrist angle, which
+    is exactly the bug that made two thumbs-up attempts unusable.
+
+    The frame is mirrored before landmarks are taken (``cv2.flip`` in app.py),
+    so this already matches what the player sees: moving the hand to their own
+    right moves it screen-right too.
+    """
+    tip, mcp = landmarks[_INDEX_TIP], landmarks[_INDEX_MCP]
+
+    dx, dy = tip.x - mcp.x, tip.y - mcp.y
+    length = math.hypot(dx, dy)
+    if length < 1e-6:
+        return None
+
+    # Image y grows downward, so negate it to make +vert mean "up the screen".
+    return dx / length, -dy / length
+
+
+def thumb_clearance(landmarks, frame=None) -> float | None:
+    """How far the thumb tip is held clear of the curled fingertips.
+
+    In palm lengths, as the distance to the *nearest* of the four fingertips.
+    This is what separates a thumbs-up from a fist: with the fingers balled, a
+    tucked thumb is physically lying on them, while a raised thumb is out in
+    space. On the recorded corpus a fist measures 0.21 at the median against a
+    thumbs-up's ~0.8 — nearly 4x, the widest gap any of the candidates gave.
+
+    Deliberately direction-free. Two earlier attempts measured where the thumb
+    *points* relative to the hand's own axis, and both failed on real hands: a
+    thumbs-up is usually made with the fist rolled so that the thumb ends up
+    near-perpendicular to the wrist -> knuckles axis, which drove those
+    measurements toward the fist end of their range exactly when the gesture
+    was most obvious. A distance between two landmarks has no such dependence,
+    so it reads the same at any wrist angle.
+
+    Not :func:`thumb_spread` either — the palm centre it measures from sits
+    under the curled fingers, so it barely moves between the two poses.
+
+    Not sufficient on its own: a *relaxed* hand rests its thumb away from the
+    fingers without extending it, which is why this pairs with
+    :func:`thumb_reach`.
+    """
+    if frame is None:
+        frame = hand_frame(landmarks)
+    if frame is None:
+        return None
+
+    _, palm_len = frame
+    thumb = landmarks[_THUMB_TIP]
+
+    return min(
+        math.hypot(thumb.x - landmarks[i].x, thumb.y - landmarks[i].y)
+        for i in _FINGERTIPS
+    ) / palm_len
+
+
+def thumb_reach(landmarks, frame=None) -> float | None:
+    """Thumb tip distance from its own base joint, in palm lengths.
+
+    Stands in for "is the thumb straight". A thumb bent at the MCP and IP
+    joints folds its tip back toward the base, so the straight-line distance
+    shrinks; an extended thumb runs the full length. On the corpus a fist
+    measures 0.71 at the median against roughly 1.1-1.4 extended.
+
+    The obvious measure — chord over arc along the thumb's own joints — does
+    not work here. MediaPipe's x/y are a projection, and a thumb bent toward or
+    away from the camera still projects as a straight line, so that ratio
+    saturates: p50 0.99 and p95 1.00 across the whole corpus, fists included.
+    Distance from the base survives the projection because the foreshortening
+    that hides the bend also shortens the distance.
+    """
+    if frame is None:
+        frame = hand_frame(landmarks)
+    if frame is None:
+        return None
+
+    _, palm_len = frame
+    thumb, base = landmarks[_THUMB_TIP], landmarks[_THUMB_CMC]
+
+    return math.hypot(thumb.x - base.x, thumb.y - base.y) / palm_len
 
 
 def thumb_spread(landmarks, frame=None) -> float | None:

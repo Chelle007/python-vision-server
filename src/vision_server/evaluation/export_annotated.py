@@ -141,6 +141,10 @@ def export_annotated_video(
             data["leftOpenPalm"] = left_gestures["open_palm"]
             data["leftIndexUp"] = left_gestures["index_up"]
             data["leftPeace"] = left_gestures["peace"]
+            data["leftThumbsUp"] = left_gestures["thumbs_up"]
+            data["leftRockSign"] = left_gestures["rock_sign"]
+            data["leftIndexLeft"] = left_gestures["index_left"]
+            data["leftIndexRight"] = left_gestures["index_right"]
             data["moveGesture"] = left_label
             data["moveGestureRaw"] = debouncers["left"].raw
 
@@ -149,6 +153,10 @@ def export_annotated_video(
             data["rightOpenPalm"] = right_gestures["open_palm"]
             data["rightIndexUp"] = right_gestures["index_up"]
             data["rightPeace"] = right_gestures["peace"]
+            data["rightThumbsUp"] = right_gestures["thumbs_up"]
+            data["rightRockSign"] = right_gestures["rock_sign"]
+            data["rightIndexLeft"] = right_gestures["index_left"]
+            data["rightIndexRight"] = right_gestures["index_right"]
             data["actionGesture"] = right_label
             data["actionGestureRaw"] = debouncers["right"].raw
 

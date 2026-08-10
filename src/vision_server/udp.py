@@ -29,11 +29,19 @@ def default_payload() -> dict:
         "leftOpenPalm": False,
         "leftIndexUp": False,
         "leftPeace": False,
+        "leftThumbsUp": False,
+        "leftRockSign": False,
+        "leftIndexLeft": False,
+        "leftIndexRight": False,
         "rightFist": False,
         "rightOpenPalm": False,
         "rightIndexUp": False,
         "rightPeace": False,
-        # The single label behind the eight booleans above, before and after
+        "rightThumbsUp": False,
+        "rightRockSign": False,
+        "rightIndexLeft": False,
+        "rightIndexRight": False,
+        # The single label behind the booleans above, before and after
         # the commit delay (see gestures/hand/debounce.py). Unity does not need
         # these — JsonUtility ignores unknown fields — but having the raw and
         # debounced labels side by side in the packet is what makes a missed or
@@ -42,6 +50,16 @@ def default_payload() -> dict:
         "moveGestureRaw": "none",
         "actionGesture": "none",
         "actionGestureRaw": "none",
+        # The two numbers that decide fist vs thumbs_up, in palm lengths: thumb
+        # tip to the nearest curled fingertip, and thumb tip to its own base
+        # (see THUMB_UP_CLEARANCE / THUMB_UP_REACH). None when the hand is
+        # absent or too foreshortened to measure. Unity ignores these; they
+        # stay in the packet so a thumbs-up that failed to fire can be diagnosed
+        # from a capture — the preview no longer draws them.
+        "moveThumbClear": None,
+        "actionThumbClear": None,
+        "moveThumbReach": None,
+        "actionThumbReach": None,
         "watchTap": False,
         "watchTapDistance": None,
         "fistRotX": 0.0,

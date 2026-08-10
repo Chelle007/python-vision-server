@@ -125,6 +125,18 @@ def build_overlay_lines(data: dict, lstm_display: str) -> list[tuple[str, tuple[
     if data["leftPeace"]:
         overlay_lines.append((f"{mv} PEACE = CROUCH", (0, 255, 0)))
 
+    if data["leftThumbsUp"]:
+        overlay_lines.append((f"{mv} THUMBS UP = INVENTORY", (0, 255, 0)))
+
+    if data["leftRockSign"]:
+        overlay_lines.append((f"{mv} ROCK SIGN = NEXT ITEM", (0, 255, 0)))
+
+    if data["leftIndexRight"]:
+        overlay_lines.append((f"{mv} POINT RIGHT = NEXT ITEM", (0, 255, 0)))
+
+    if data["leftIndexLeft"]:
+        overlay_lines.append((f"{mv} POINT LEFT = PREV ITEM", (0, 255, 0)))
+
     if data["rightFist"]:
         overlay_lines.append((f"{ac} FIST = GRAB", (0, 255, 0)))
 

@@ -28,6 +28,11 @@ from vision_server.gestures.hand.cursor_fields import (
     apply_cursor_fields,
     reset_last_point,
 )
+from vision_server.gestures.hand.fingers import (
+    hand_frame,
+    thumb_clearance,
+    thumb_reach,
+)
 from vision_server.gestures.hand.geometry import get_hand_rotation
 from vision_server.gestures.hand.watch_tap import apply_watch_tap_fields
 from vision_server.gestures.head import HEAD_RULES
@@ -64,6 +69,28 @@ def _landmark_dicts(landmarks) -> list[dict]:
         {"x": round(lm.x, 4), "y": round(lm.y, 4), "z": round(lm.z, 4)}
         for lm in landmarks
     ]
+
+
+def _thumb_metrics(landmarks) -> tuple[float | None, float | None]:
+    """Diagnostic ``(clearance, reach)`` for one hand, in palm lengths.
+
+    These two are the whole fist/thumbs-up decision, so putting them in the
+    payload turns "the gesture will not fire" into a pair of readings that can
+    be compared against THUMB_UP_CLEARANCE / THUMB_UP_REACH on the spot.
+    """
+    if landmarks is None:
+        return None, None
+
+    frame = hand_frame(landmarks)
+    if frame is None:
+        return None, None
+
+    clearance = thumb_clearance(landmarks, frame)
+    reach = thumb_reach(landmarks, frame)
+    return (
+        None if clearance is None else round(clearance, 2),
+        None if reach is None else round(reach, 2),
+    )
 
 
 def _append_hand_packet(data: dict, hand) -> None:
@@ -239,16 +266,30 @@ def main():
             data["leftOpenPalm"] = move_gestures["open_palm"]
             data["leftIndexUp"] = move_gestures["index_up"]
             data["leftPeace"] = move_gestures["peace"]
+            data["leftThumbsUp"] = move_gestures["thumbs_up"]
+            data["leftRockSign"] = move_gestures["rock_sign"]
+            data["leftIndexLeft"] = move_gestures["index_left"]
+            data["leftIndexRight"] = move_gestures["index_right"]
             data["moveGesture"] = move_label
             data["moveGestureRaw"] = move_debounce.raw
+            data["moveThumbClear"], data["moveThumbReach"] = _thumb_metrics(
+                move_landmarks
+            )
 
             action_gestures = rules_from_label(action_label)
             data["rightFist"] = action_gestures["fist"]
             data["rightOpenPalm"] = action_gestures["open_palm"]
             data["rightIndexUp"] = action_gestures["index_up"]
             data["rightPeace"] = action_gestures["peace"]
+            data["rightThumbsUp"] = action_gestures["thumbs_up"]
+            data["rightRockSign"] = action_gestures["rock_sign"]
+            data["rightIndexLeft"] = action_gestures["index_left"]
+            data["rightIndexRight"] = action_gestures["index_right"]
             data["actionGesture"] = action_label
             data["actionGestureRaw"] = action_debounce.raw
+            data["actionThumbClear"], data["actionThumbReach"] = _thumb_metrics(
+                action_landmarks
+            )
 
             if action is not None:
                 lstm.register_hand_seen()
