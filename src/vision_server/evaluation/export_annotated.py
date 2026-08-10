@@ -13,7 +13,12 @@ from vision_server.evaluation.segment_scoring import (
     load_segments,
 )
 from vision_server.gestures.dynamic import GestureLSTM
-from vision_server.gestures.hand import HAND_RULES
+from vision_server.gestures.hand import (
+    NONE,
+    GestureDebouncer,
+    classify_hand,
+    rules_from_label,
+)
 from vision_server.gestures.hand.cursor_fields import (
     apply_cursor_fields,
     reset_last_point,
@@ -23,10 +28,6 @@ from vision_server.gestures.hand.watch_tap import apply_watch_tap_fields
 from vision_server.overlay import build_overlay_lines, draw_overlay, draw_text_with_bg
 from vision_server.tracking import create_hands
 from vision_server.udp import default_payload
-
-
-def _evaluate_hand_rules(landmarks) -> dict[str, bool]:
-    return {name: fn(landmarks) for name, fn in HAND_RULES}
 
 
 def _active_label(segments: list[dict], t: float) -> tuple[str | None, float | None, float | None]:
@@ -80,6 +81,9 @@ def export_annotated_video(
     mp_hands = mp.solutions.hands
     mp_draw = mp.solutions.drawing_utils
     last_point = [-1.0, -1.0]
+    # Same commit delay as the live server, so the exported HUD shows the
+    # labels Unity would actually have received rather than the raw rules.
+    debouncers = {"left": GestureDebouncer(), "right": GestureDebouncer()}
 
     frame_i = 0
     try:
@@ -109,7 +113,6 @@ def export_annotated_video(
                 ):
                     landmarks = hand_landmarks.landmark
                     side = handedness.classification[0].label.lower()
-                    gestures = _evaluate_hand_rules(landmarks)
 
                     if draw_landmarks:
                         mp_draw.draw_landmarks(
@@ -120,27 +123,46 @@ def export_annotated_video(
 
                     if side == "left":
                         left_landmarks = landmarks
-                        data["leftFist"] = gestures["fist"]
-                        data["leftOpenPalm"] = gestures["open_palm"]
-                        data["leftIndexUp"] = gestures["index_up"]
-                        data["leftPeace"] = gestures["peace"]
                     else:
                         right_landmarks = landmarks
                         right_hand_seen = True
-                        lstm.register_hand_seen()
-                        data["rightFist"] = gestures["fist"]
-                        data["rightOpenPalm"] = gestures["open_palm"]
-                        data["rightIndexUp"] = gestures["index_up"]
-                        data["rightPeace"] = gestures["peace"]
-                        apply_cursor_fields(data, landmarks, gestures, last_point)
-                        pitch, yaw, roll = get_hand_rotation(landmarks)
-                        data["fistRotX"] = round(pitch, 3)
-                        data["fistRotY"] = round(yaw, 3)
-                        data["fistRotZ"] = round(roll, 3)
-                        lstm_display = lstm.predict(landmarks)
-                        data["lstm_gesture"] = (
-                            lstm_display if lstm_display in lstm.classes else "Idle"
-                        )
+
+            # Both sides are debounced every frame, absent ones included, so a
+            # dropout is counted out rather than instantly ending a gesture.
+            left_label = debouncers["left"].update(
+                classify_hand(left_landmarks) if left_landmarks is not None else NONE
+            )
+            right_label = debouncers["right"].update(
+                classify_hand(right_landmarks) if right_landmarks is not None else NONE
+            )
+
+            left_gestures = rules_from_label(left_label)
+            data["leftFist"] = left_gestures["fist"]
+            data["leftOpenPalm"] = left_gestures["open_palm"]
+            data["leftIndexUp"] = left_gestures["index_up"]
+            data["leftPeace"] = left_gestures["peace"]
+            data["moveGesture"] = left_label
+            data["moveGestureRaw"] = debouncers["left"].raw
+
+            right_gestures = rules_from_label(right_label)
+            data["rightFist"] = right_gestures["fist"]
+            data["rightOpenPalm"] = right_gestures["open_palm"]
+            data["rightIndexUp"] = right_gestures["index_up"]
+            data["rightPeace"] = right_gestures["peace"]
+            data["actionGesture"] = right_label
+            data["actionGestureRaw"] = debouncers["right"].raw
+
+            if right_landmarks is not None:
+                lstm.register_hand_seen()
+                apply_cursor_fields(data, right_landmarks, right_gestures, last_point)
+                pitch, yaw, roll = get_hand_rotation(right_landmarks)
+                data["fistRotX"] = round(pitch, 3)
+                data["fistRotY"] = round(yaw, 3)
+                data["fistRotZ"] = round(roll, 3)
+                lstm_display = lstm.predict(right_landmarks)
+                data["lstm_gesture"] = (
+                    lstm_display if lstm_display in lstm.classes else "Idle"
+                )
 
             if apply_watch_tap_fields(data, left_landmarks, right_landmarks):
                 reset_last_point(last_point)

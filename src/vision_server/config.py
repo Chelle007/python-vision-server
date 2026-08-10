@@ -106,6 +106,71 @@ CHALLENGER_MIN_FACE_WIDTH = 0.08
 CHALLENGER_MAX_CENTER_DIST = 0.35
 CHALLENGER_SIZE_REF = 0.22
 
+# --- Static hand gestures -------------------------------------------------
+# Finger extension is measured along the hand's own axis and divided by the
+# palm length (see gestures/hand/fingers.py), so these are in palm lengths and
+# do not change with hand size, distance or wrist angle. Full extension is
+# around +0.5 and a full curl around -0.5; the band between the two thresholds
+# is the dead zone where a finger counts as neither, which is what lets a
+# mid-transition hand be classified as "no gesture" instead of as whichever
+# gesture it is passing through.
+FINGER_EXTEND_MARGIN = 0.10
+FINGER_CURL_MARGIN = 0.10
+# Thumb tip distance from the palm centre, also in palm lengths. Replaces the
+# old fixed 0.08 in image coordinates, which quietly got stricter as the player
+# leaned back. Calibrated against the 34k recorded frames in data/: across
+# frames where all four fingers are clearly extended, thumb spread runs
+# p5=0.32 / p25=0.52 / p50=0.66. Converting the old 0.08 literally would have
+# landed near 0.7 and thrown away over half of them. Swept 0.5/0.55/0.6/0.65 on
+# test_video_1: 0.6 gives the fewest spurious open-palm triggers (right 30->27,
+# left 28->26) with no cost to the intended fire rate, which does not move at
+# any value in that range because it is limited by the finger dead zone rather
+# than by the thumb.
+THUMB_SPREAD_RATIO = 0.6
+
+# Commit delay per gesture, in consecutive frames (see hand/debounce.py).
+# Asymmetric on purpose:
+#   on  = frames needed to START the gesture — high for one-shots, so a pose
+#         passed through on the way to another cannot fire it.
+#   off = frames needed to END it — high for holds, so a dropped frame or a
+#         brief loss of the hand does not release a crouch or stop movement.
+# Entering a gesture costs latency, so holds enter fast (walking should not lag
+# by 100ms) while jump, which nobody notices two frames late, enters slow.
+HAND_GESTURE_ON_FRAMES = {
+    "fist": 2,
+    "peace": 2,
+    "open_palm": 2,
+    "index_up": 3,
+    "none": 1,
+}
+HAND_GESTURE_OFF_FRAMES = {
+    "fist": 4,
+    "peace": 5,
+    "open_palm": 3,
+    "index_up": 2,
+    # Leaving "no gesture" is governed purely by the incoming gesture's on-count.
+    "none": 0,
+}
+HAND_GESTURE_DEFAULT_ON_FRAMES = 2
+HAND_GESTURE_DEFAULT_OFF_FRAMES = 2
+
+# The tables above are the ACTION hand's. The MOVE hand overrides them, because
+# the same gesture means different things on each hand and the two wants are
+# opposite:
+#
+#   fist on the ACTION hand = sit / grab. Sit is a one-shot fired on a rising
+#   edge, so a spurious frame costs you a chair; delay is worth paying.
+#   fist on the MOVE hand   = walk forward. Held continuously, released
+#   constantly, and every frame of delay is felt directly as the player sliding
+#   past where they meant to stop.
+#
+# So the MOVE hand's fist starts instantly and releases after a single
+# tolerated frame. Everything it does not name is inherited, which is the point
+# of writing it as an override: jump keeps on=3 because it is the one-shot that
+# phantom-fired, and crouch keeps off=5 because that long release is the whole
+# reason a dropped frame no longer stands the player up.
+MOVE_GESTURE_OVERRIDES = {"fist": {"on": 1, "off": 2}}
+
 HEAD_TILT_THRESHOLD = 0.5
 # Look-up on *calibrated* pitch: head_pitch <= -this (negative = look up).
 # Applied AFTER pitch_neutral subtraction so rest ≈ 0.

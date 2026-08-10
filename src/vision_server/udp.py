@@ -33,6 +33,15 @@ def default_payload() -> dict:
         "rightOpenPalm": False,
         "rightIndexUp": False,
         "rightPeace": False,
+        # The single label behind the eight booleans above, before and after
+        # the commit delay (see gestures/hand/debounce.py). Unity does not need
+        # these — JsonUtility ignores unknown fields — but having the raw and
+        # debounced labels side by side in the packet is what makes a missed or
+        # spurious gesture diagnosable from a capture rather than from memory.
+        "moveGesture": "none",
+        "moveGestureRaw": "none",
+        "actionGesture": "none",
+        "actionGestureRaw": "none",
         "watchTap": False,
         "watchTapDistance": None,
         "fistRotX": 0.0,
