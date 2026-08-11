@@ -145,6 +145,7 @@ def export_annotated_video(
             data["leftRockSign"] = left_gestures["rock_sign"]
             data["leftIndexLeft"] = left_gestures["index_left"]
             data["leftIndexRight"] = left_gestures["index_right"]
+            data["leftIndexDown"] = left_gestures["index_down"]
             data["moveGesture"] = left_label
             data["moveGestureRaw"] = debouncers["left"].raw
 
@@ -157,6 +158,7 @@ def export_annotated_video(
             data["rightRockSign"] = right_gestures["rock_sign"]
             data["rightIndexLeft"] = right_gestures["index_left"]
             data["rightIndexRight"] = right_gestures["index_right"]
+            data["rightIndexDown"] = right_gestures["index_down"]
             data["actionGesture"] = right_label
             data["actionGestureRaw"] = debouncers["right"].raw
 

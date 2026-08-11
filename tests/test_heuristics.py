@@ -12,6 +12,7 @@ from vision_server.gestures.hand import HAND_RULES, rules_from_label
 from vision_server.gestures.hand.classify import NONE, classify_hand
 from vision_server.gestures.hand.fingers import finger_margins
 from vision_server.gestures.hand.fist import is_fist
+from vision_server.gestures.hand.index_down import is_index_down
 from vision_server.gestures.hand.index_left import is_index_left
 from vision_server.gestures.hand.index_right import is_index_right
 from vision_server.gestures.hand.index_up import is_index_up
@@ -31,6 +32,7 @@ def test_hand_rules_registry_contains_expected_gestures():
         "index_up",
         "index_left",
         "index_right",
+        "index_down",
         "thumbs_up",
         "rock_sign",
     }
@@ -163,8 +165,14 @@ def test_diagonal_point_is_no_gesture():
         assert classify_hand(hand_pose(index=True, rotation_deg=degrees)) == NONE, degrees
 
 
-def test_pointing_down_is_no_gesture():
-    assert classify_hand(hand_pose(index=True, rotation_deg=180)) == NONE
+def test_point_down():
+    assert is_index_down(hand_pose(index=True, rotation_deg=180)) is True
+
+
+def test_point_down_is_read_in_screen_space_too():
+    """Down is a claim about the room, same as left and right."""
+    for degrees in (165, 180, 195):
+        assert is_index_down(hand_pose(index=True, rotation_deg=degrees)) is True, degrees
 
 
 # --- Rock sign -------------------------------------------------------------

@@ -49,6 +49,7 @@ def _clear_solo_hand_gestures(data: dict) -> None:
     data["leftRockSign"] = False
     data["leftIndexLeft"] = False
     data["leftIndexRight"] = False
+    data["leftIndexDown"] = False
     data["rightFist"] = False
     data["rightOpenPalm"] = False
     data["rightIndexUp"] = False
@@ -57,6 +58,7 @@ def _clear_solo_hand_gestures(data: dict) -> None:
     data["rightRockSign"] = False
     data["rightIndexLeft"] = False
     data["rightIndexRight"] = False
+    data["rightIndexDown"] = False
     data["moveGesture"] = "none"
     data["actionGesture"] = "none"
     data["fistRotX"] = 0.0

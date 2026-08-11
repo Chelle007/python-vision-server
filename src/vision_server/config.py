@@ -179,13 +179,14 @@ THUMB_UP_CLEARANCE = 0.70
 THUMB_UP_REACH = 0.95
 
 # --- Pointing (inventory next / back) --------------------------------------
-# One extended index used to be a single gesture. It is now three, split by
+# One extended index used to be a single gesture. It is now four, split by
 # where the finger points in SCREEN space (see fingers.index_direction): up is
-# jump, left and right step the inventory selection.
+# jump, left and right step the inventory selection, and down is its own
+# gesture rather than the leftover it used to be.
 #
 # The value is a cosine, so it defines a cone half-angle: 0.80 is ~37 degrees
 # either side of each axis. It MUST stay above cos(45 degrees) = 0.707, or the
-# up and sideways cones overlap and a diagonal point satisfies both.
+# up/down and sideways cones overlap and a diagonal point satisfies both.
 #
 # Measured on the 6.6k index-up frames in data/, all of them genuine jumps:
 # they point firmly up (vert p50 = +0.99, p5 = +0.70), so the split is nearly
@@ -196,6 +197,12 @@ THUMB_UP_REACH = 0.95
 #
 # NOTE this is a real behaviour change for jump: an index pointing sideways
 # used to fire it and now does not.
+#
+# Adding the down cone costs nothing measurable: it can only claim frames that
+# already read NONE, and over all 34.6k recorded frames in data/ exactly 7
+# (0.02%, all in Pull_Lever) fall inside it. The corpus contains no deliberate
+# point-down, so that is the whole false-fire surface, and it is well under the
+# 3-frame commit delay below.
 INDEX_POINT_CONE = 0.80
 # hand_frame only rejects a hand with NO measurable axis (0.02), which leaves
 # badly foreshortened hands whose small palm length inflates every ratio
@@ -229,6 +236,7 @@ HAND_GESTURE_ON_FRAMES = {
     # finger sweeping past on the way somewhere else.
     "index_left": 3,
     "index_right": 3,
+    "index_down": 3,
     "none": 1,
 }
 HAND_GESTURE_OFF_FRAMES = {
@@ -242,6 +250,7 @@ HAND_GESTURE_OFF_FRAMES = {
     "rock_sign": 3,
     "index_left": 3,
     "index_right": 3,
+    "index_down": 3,
     # Leaving "no gesture" is governed purely by the incoming gesture's on-count.
     "none": 0,
 }

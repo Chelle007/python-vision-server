@@ -279,6 +279,7 @@ def main():
             data["leftRockSign"] = move_gestures["rock_sign"]
             data["leftIndexLeft"] = move_gestures["index_left"]
             data["leftIndexRight"] = move_gestures["index_right"]
+            data["leftIndexDown"] = move_gestures["index_down"]
             data["moveGesture"] = move_label
             data["moveGestureRaw"] = move_debounce.raw
             data["moveThumbClear"], data["moveThumbReach"] = _thumb_metrics(
@@ -294,6 +295,7 @@ def main():
             data["rightRockSign"] = action_gestures["rock_sign"]
             data["rightIndexLeft"] = action_gestures["index_left"]
             data["rightIndexRight"] = action_gestures["index_right"]
+            data["rightIndexDown"] = action_gestures["index_down"]
             data["actionGesture"] = action_label
             data["actionGestureRaw"] = action_debounce.raw
             data["actionThumbClear"], data["actionThumbReach"] = _thumb_metrics(

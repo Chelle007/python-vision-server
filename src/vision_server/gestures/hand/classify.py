@@ -69,6 +69,7 @@ LABELS = (
     "index_up",
     "index_left",
     "index_right",
+    "index_down",
     "thumbs_up",
     "rock_sign",
 )
@@ -116,14 +117,14 @@ def _is_thumbs_up(landmarks, frame) -> bool:
 
 
 def _pointing_label(landmarks) -> str:
-    """Split one extended index into up / left / right by where it points.
+    """Split one extended index into up / down / left / right by where it points.
 
     Cones rather than a nearest-axis vote, so the diagonals fall into a dead
     zone and report ``NONE`` instead of being forced into whichever neighbour
     happens to win by a hair. That mirrors what the finger dead zone already
     does one level down: a hand caught between two poses is in neither.
 
-    ``INDEX_POINT_CONE`` above cos(45 degrees) = 0.707 is what keeps the three
+    ``INDEX_POINT_CONE`` above cos(45 degrees) = 0.707 is what keeps the four
     cones from overlapping, so no direction can satisfy two of them.
     """
     direction = index_direction(landmarks)
@@ -138,8 +139,10 @@ def _pointing_label(landmarks) -> str:
         return "index_right"
     if horiz <= -INDEX_POINT_CONE:
         return "index_left"
+    if vert <= -INDEX_POINT_CONE:
+        return "index_down"
 
-    # Pointing diagonally, or straight down — no gesture claims it.
+    # Pointing diagonally — no gesture claims it.
     return NONE
 
 
@@ -170,7 +173,7 @@ def classify_hand(landmarks) -> str:
     if label == "fist" and _is_thumbs_up(landmarks, frame):
         return "thumbs_up"
 
-    # One extended index is three gestures, told apart by where it points.
+    # One extended index is four gestures, told apart by where it points.
     if label == "index_up":
         return _pointing_label(landmarks)
 

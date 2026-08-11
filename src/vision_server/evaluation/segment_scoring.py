@@ -32,6 +32,7 @@ STATIC_LABELS = {
     "leftRockSign": ("left", "rock_sign"),
     "leftIndexLeft": ("left", "index_left"),
     "leftIndexRight": ("left", "index_right"),
+    "leftIndexDown": ("left", "index_down"),
     "rightFist": ("right", "fist"),
     "rightOpenPalm": ("right", "open_palm"),
 }

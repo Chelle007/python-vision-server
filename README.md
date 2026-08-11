@@ -234,6 +234,7 @@ Key fields teammates may use:
 | `leftFist`, `leftIndexUp`, `leftPeace` | bool   | Left-hand movement. `leftIndexUp` (jump) now requires pointing **up** — sideways is next/prev below |
 | `leftThumbsUp`, `leftRockSign`         | bool   | Inventory open / next item — one-shots, read the **rising edge** |
 | `leftIndexLeft`, `leftIndexRight`      | bool   | Point left / right — inventory prev / next. Also one-shots; direction is screen-relative |
+| `leftIndexDown`, `rightIndexDown`      | bool   | Point down — same cone treatment as the other three; no Unity binding yet |
 | `rightFist`, `rightOpenPalm`           | bool   | Right-hand interaction                 |
 | `rightIndexUp`                         | bool   | Right-hand index up (e.g. stand from sit) |
 | `rightThumbsUp`, `rightRockSign`       | bool   | Same two gestures on the action hand (sent for symmetry; unused so far) |

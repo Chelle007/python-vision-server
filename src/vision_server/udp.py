@@ -33,6 +33,7 @@ def default_payload() -> dict:
         "leftRockSign": False,
         "leftIndexLeft": False,
         "leftIndexRight": False,
+        "leftIndexDown": False,
         "rightFist": False,
         "rightOpenPalm": False,
         "rightIndexUp": False,
@@ -41,6 +42,7 @@ def default_payload() -> dict:
         "rightRockSign": False,
         "rightIndexLeft": False,
         "rightIndexRight": False,
+        "rightIndexDown": False,
         # The single label behind the booleans above, before and after
         # the commit delay (see gestures/hand/debounce.py). Unity does not need
         # these — JsonUtility ignores unknown fields — but having the raw and

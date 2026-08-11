@@ -16,6 +16,7 @@ def rule(name: str):
 # Import gesture modules so they self-register via @rule
 from . import (  # noqa: E402, F401
     fist,
+    index_down,
     index_left,
     index_right,
     index_up,
