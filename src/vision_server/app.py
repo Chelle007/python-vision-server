@@ -5,6 +5,8 @@ import mediapipe as mp
 
 from vision_server.camera import LatestFrameCamera
 from vision_server.config import (
+    ACTION_GESTURE_LATCH,
+    ACTION_LATCH_HAND_LOST_FRAMES,
     CAMERA_FPS,
     CAMERA_HEIGHT,
     CAMERA_WIDTH,
@@ -126,8 +128,15 @@ def main():
     # instance would let the MOVE hand's streak commit the ACTION hand's label.
     # They also carry different thresholds — walking wants to start and stop
     # immediately, sitting does not (see MOVE_GESTURE_OVERRIDES in config).
+    # Only the ACTION hand latches: its fist is grab, which must outlast the
+    # tracking blind spot that ACTION_GESTURE_LATCH describes. The MOVE hand's
+    # fist is walk-forward and gets no latch, so a dropout still stops the
+    # player.
     move_debounce = GestureDebouncer(MOVE_GESTURE_OVERRIDES)
-    action_debounce = GestureDebouncer()
+    action_debounce = GestureDebouncer(latch=ACTION_GESTURE_LATCH)
+    # The latch's only exit when the hand simply leaves — see
+    # ACTION_LATCH_HAND_LOST_FRAMES.
+    action_hand_lost = 0
     frame_stats = FrameStats()
 
     # Threaded reader drops stale buffered frames while MediaPipe runs.
@@ -324,7 +333,16 @@ def main():
                 move_debounce.reset()
                 action_debounce.reset()
 
-            if not action_hand_seen:
+            if action_hand_seen:
+                action_hand_lost = 0
+            else:
+                action_hand_lost += 1
+                if action_hand_lost >= ACTION_LATCH_HAND_LOST_FRAMES:
+                    # The hand is gone, not merely unreadable. Nothing else
+                    # clears a latched hold, so without this the player keeps
+                    # gripping an object they walked away from.
+                    action_debounce.reset()
+
                 reset_last_point(last_point)
                 lstm.register_hand_lost()
                 lstm_display = lstm.get_overlay_label()

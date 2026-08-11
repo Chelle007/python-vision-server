@@ -265,6 +265,50 @@ HAND_GESTURE_DEFAULT_OFF_FRAMES = 2
 # reason a dropped frame no longer stands the player up.
 MOVE_GESTURE_OVERRIDES = {"fist": {"on": 1, "off": 2}}
 
+# Labels on the ACTION hand whose hold does not time out against an unreadable
+# hand. An off-count is a bet that a dropout is short, and for grab that bet is
+# simply wrong: `classify_hand` reports NONE whenever the palm axis it measures
+# against foreshortens, which is exactly what happens when a fist is rotated
+# toward the camera or held further away. Measured over the 21k grab-pose frames
+# in data/ (Pull_Lever, Turn_Key, both views), the fist rate falls from 61% at
+# palm_len 0.13-0.16 to 19% below 0.04, because ring and pinky flip from a
+# median margin of -0.19 to +0.18 and the all-curled pattern stops matching.
+#
+# The resulting NONE runs are p50 3 frames but p90 22, so 42% of them outlast
+# the 4-frame off-count and drop whatever the player was holding. No frame count
+# survives that tail, and one long enough to try would make real releases feel
+# stuck.
+#
+# So the release condition changes shape rather than size: a latched label is
+# held through NONE indefinitely, and ends only once some *other* label is read
+# — which still costs the usual off-count, so this weakens nothing about how a
+# deliberate release behaves. Over the same frames, once a grab is underway 37%
+# read NONE while only 2.5% read a competing label, so nearly the whole failure
+# mode is recovered and almost no real release is delayed.
+#
+# ACTION-only, and deliberately not in the tables above: fist on the MOVE hand
+# is walk-forward, where holding through a dropout means the player keeps
+# walking after they meant to stop. Latching that would be a worse bug than the
+# one this fixes.
+#
+# Set to () to disable — the debouncer falls back to pure frame counting.
+ACTION_GESTURE_LATCH = ("fist",)
+
+# Consecutive frames with no ACTION hand at all before a latched hold is
+# abandoned. Without it the latch has no exit: a player who lowers their arm
+# leaves a fist committed forever, and never gets the object out of their hand.
+#
+# "No hand" is a different signal from "unreadable hand", and only this one gets
+# a timeout. A hand MediaPipe can see but `classify_hand` will not name is the
+# blind spot the latch exists to cover, and it lasts as long as the pose does. A
+# hand MediaPipe cannot find at all is out of frame or by the player's side, and
+# waiting on that is how a grab gets stuck.
+#
+# Generous on purpose: whole-hand tracking loss is also what poor lighting looks
+# like, and dropping held objects when the room dims is its own bug. ~1s at
+# 30fps, counted in frames because frame time here is neither 30fps nor stable.
+ACTION_LATCH_HAND_LOST_FRAMES = 30
+
 HEAD_TILT_THRESHOLD = 0.35
 # Look-up on *calibrated* pitch: head_pitch <= -this (negative = look up).
 # Applied AFTER pitch_neutral subtraction so rest ≈ 0.

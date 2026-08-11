@@ -39,6 +39,13 @@ most.
 Note this filters *flicker*, not *error*. A pose misread the same way for ten
 straight frames passes any debouncer happily; that is what the hand-frame work
 in ``fingers.py`` is for.
+
+One label needs more than a bigger off-count. Grab dropouts are not flicker —
+they are a systematic blind spot in ``fingers.py`` that lasts as long as the
+player holds the hand at the angle that causes it, so the ``away`` run has no
+bounded length to tune against. Those labels are *latched*: NONE stops counting
+toward release entirely, and only a competing label ends the hold. See
+``latch`` on the constructor.
 """
 
 from __future__ import annotations
@@ -60,12 +67,22 @@ class GestureDebouncer:
     hands would let one hand's counters decide the other's gesture.
     """
 
-    def __init__(self, overrides: dict[str, dict[str, int]] | None = None):
+    def __init__(
+        self,
+        overrides: dict[str, dict[str, int]] | None = None,
+        *,
+        latch: tuple[str, ...] = (),
+    ):
         """``overrides`` is ``{label: {"on": n, "off": n}}``, merged onto the
         defaults. Written as a diff rather than a full replacement table so a
         role that differs in one gesture says only that, instead of restating
         the nine values it agrees with — where a later edit to a shared default
         would silently miss the copy.
+
+        ``latch`` names labels that are held through ``NONE`` without limit —
+        see :const:`~vision_server.config.ACTION_GESTURE_LATCH`. Empty by
+        default so a role opts in explicitly; the MOVE hand must not, because
+        its fist is walk-forward.
         """
         self._on_frames = dict(HAND_GESTURE_ON_FRAMES)
         self._off_frames = dict(HAND_GESTURE_OFF_FRAMES)
@@ -74,6 +91,7 @@ class GestureDebouncer:
                 self._on_frames[label] = counts["on"]
             if "off" in counts:
                 self._off_frames[label] = counts["off"]
+        self._latch = frozenset(latch)
         self.label = NONE
         self.raw = NONE
         self._candidate = NONE
@@ -111,7 +129,14 @@ class GestureDebouncer:
             self._away = 0
             return self.label
 
-        self._away += 1
+        # A latched label treats "unreadable" as "unchanged": NONE frames do not
+        # advance the release counter, so the hold survives a dropout of any
+        # length. Every other label still does advance it, which is what keeps a
+        # deliberate release — open palm, peace, a pointing finger — costing the
+        # same off-count it always did.
+        latched = raw_label == NONE and self.label in self._latch
+        if not latched:
+            self._away += 1
 
         if raw_label == self._candidate:
             self._streak += 1
@@ -119,7 +144,7 @@ class GestureDebouncer:
             self._candidate = raw_label
             self._streak = 1
 
-        released = self._away >= self._off_frames.get(
+        released = not latched and self._away >= self._off_frames.get(
             self.label, HAND_GESTURE_DEFAULT_OFF_FRAMES
         )
         arrived = self._streak >= self._on_frames.get(

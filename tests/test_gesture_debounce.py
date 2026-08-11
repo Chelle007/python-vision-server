@@ -6,6 +6,8 @@ dropout cannot release) rather than the specific frame counts.
 """
 
 from vision_server.config import (
+    ACTION_GESTURE_LATCH,
+    ACTION_LATCH_HAND_LOST_FRAMES,
     HAND_GESTURE_OFF_FRAMES,
     HAND_GESTURE_ON_FRAMES,
     MOVE_GESTURE_OVERRIDES,
@@ -214,3 +216,97 @@ def test_custom_thresholds_are_honoured():
     assert debouncer.update("fist") == "fist"
     assert feed(debouncer, NONE, 2) == "fist"
     assert debouncer.update(NONE) == NONE
+
+
+# --- latched holds -------------------------------------------------------
+#
+# Grab dropouts are not flicker: `classify_hand` returns NONE for as long as the
+# player holds the fist at an angle that foreshortens the palm axis, so there is
+# no bounded run length for an off-count to cover. These pin the shape of the
+# fix — NONE never releases, a real gesture still does.
+
+
+def test_latched_hold_survives_a_dropout_no_off_count_could_cover():
+    """The symptom: the player is still gripping, and the object falls.
+
+    Deliberately far past every off-count in config, because the point of the
+    latch is that no finite one would have worked.
+    """
+    action = settle(GestureDebouncer(latch=("fist",)), "fist")
+
+    assert feed(action, NONE, HAND_GESTURE_OFF_FRAMES["fist"] * 25) == "fist"
+
+
+def test_latched_hold_still_ends_on_a_real_gesture():
+    """Opening the hand must still let go, at the usual cost.
+
+    The latch is about not guessing, not about being hard to leave: an open palm
+    is the player saying "release", and it is answered on the same off-count as
+    before.
+    """
+    action = settle(GestureDebouncer(latch=("fist",)), "fist")
+
+    feed(action, NONE, 30)
+    settle(action, "open_palm")
+
+
+def test_latched_hold_ends_on_the_gestures_that_stand_the_player_up():
+    """Standing is index-up in the tutorial room and peace in the drum room.
+
+    Both are made while seated and holding something, so a latch that only
+    answered open palm would leave the player stuck sitting.
+    """
+    for stand_gesture in ("index_up", "peace"):
+        action = settle(GestureDebouncer(latch=("fist",)), "fist")
+        feed(action, NONE, 30)
+        settle(action, stand_gesture)
+
+
+def test_dropouts_interleaved_with_a_release_still_release():
+    """A hand opening produces open_palm mixed with NONE, never a clean run.
+
+    The NONE frames must not undo the progress the open_palm frames made, or a
+    messy release would hold forever — the failure the latch could plausibly
+    have introduced.
+    """
+    action = settle(GestureDebouncer(latch=("fist",)), "fist")
+
+    for _ in range(HAND_GESTURE_OFF_FRAMES["fist"] * 3):
+        action.update("open_palm")
+        action.update(NONE)
+
+    assert action.label != "fist"
+
+
+def test_move_hand_is_not_latched_so_walking_still_stops():
+    """The bug this fix must not become: the player keeps walking.
+
+    leftFist is walk-forward. It is a separate debouncer with no latch, and
+    losing the hand has to stop the player like it always did.
+    """
+    move = settle(GestureDebouncer(MOVE_GESTURE_OVERRIDES), "fist")
+
+    assert feed(move, NONE, MOVE_GESTURE_OVERRIDES["fist"]["off"]) == NONE
+
+
+def test_only_the_action_hand_latches_and_only_its_fist():
+    """Latching is opt-in per role, and names one label."""
+    assert ACTION_GESTURE_LATCH == ("fist",)
+    assert GestureDebouncer().update  # default is unlatched
+    unlatched = settle(GestureDebouncer(), "fist")
+    assert feed(unlatched, NONE, HAND_GESTURE_OFF_FRAMES["fist"]) == NONE
+
+
+def test_a_latched_hold_can_always_be_cleared():
+    """The latch's escape hatch, exercised the way app.py uses it.
+
+    app.py counts consecutive frames with no ACTION hand and calls `reset` past
+    ACTION_LATCH_HAND_LOST_FRAMES. Nothing else ends a latched hold once the
+    landmarks stop arriving, so a player who lowers their arm depends on this.
+    """
+    action = settle(GestureDebouncer(latch=("fist",)), "fist")
+    feed(action, NONE, ACTION_LATCH_HAND_LOST_FRAMES * 2)
+    assert action.label == "fist"
+
+    action.reset()
+    assert action.label == NONE
