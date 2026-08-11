@@ -16,8 +16,15 @@ from vision_server.config import (
     MAX_NUM_HANDS,
     MOVE_GESTURE_OVERRIDES,
     SHOW_PREVIEW,
+    UDP_CONTROL_IP,
+    UDP_CONTROL_PORT,
     UDP_IP,
     UDP_PORT,
+)
+from vision_server.control import (
+    apply_control_messages,
+    create_control_socket,
+    drain_control_socket,
 )
 from vision_server.gestures.dynamic import GestureLSTM
 from vision_server.gestures.hand import (
@@ -47,6 +54,7 @@ from vision_server.overlay import (
     draw_pitch_indicator,
 )
 from vision_server.perfstats import FrameStats
+from vision_server.preview import PreviewStream
 from vision_server.puzzle_gate import PuzzleGate
 from vision_server.runtime import apply_opencv_threads
 from vision_server.tracking import (
@@ -111,6 +119,10 @@ def _append_hand_packet(data: dict, hand) -> None:
 def main():
     apply_opencv_threads()
     sock = create_udp_socket()
+    # Inbound half of the link. Non-blocking, drained once per frame below.
+    control_sock = create_control_socket()
+    # Off until Unity opens the calibrate panel.
+    preview_stream = PreviewStream()
 
     mp_hands = mp.solutions.hands
     mp_draw = mp.solutions.drawing_utils
@@ -144,6 +156,7 @@ def main():
     cam_w, cam_h, cam_fps = cap.negotiated_size()
 
     print(f"Combined Vision Server Running. Sending UDP to {UDP_IP}:{UDP_PORT}")
+    print(f"Listening for Unity control messages on {UDP_CONTROL_IP}:{UDP_CONTROL_PORT}")
     print(
         f"Camera negotiated: {cam_w}x{cam_h} @ {cam_fps:.0f} fps "
         f"(requested {CAMERA_WIDTH}x{CAMERA_HEIGHT} @ {CAMERA_FPS})"
@@ -157,7 +170,7 @@ def main():
         )
     else:
         print("Headless (SHOW_PREVIEW=False): no preview window, no keys.")
-        print("Press Ctrl-C to quit. Unity drives the puzzle gate.")
+        print("Press Ctrl-C to quit. Pitch recalibration comes from Unity.")
         print(
             "Hand roles fixed at ACTION = "
             f"{hand_roles.action_hand.upper()}, "
@@ -216,6 +229,24 @@ def main():
             t_face = time.perf_counter()
 
             lock = player_lock.update(faces, collect_hands(hand_results))
+
+            # Unity's controls, applied before anything reads the state they
+            # touch. Billed to logic_ms below; an empty queue costs one
+            # non-blocking recvfrom.
+            control = apply_control_messages(
+                drain_control_socket(control_sock),
+                pitch_cal=pitch_cal,
+                preview=preview_stream,
+            )
+            if control.recalibrate_pitch:
+                print("Pitch recalibration requested by Unity — hold still.")
+            if control.preview_changed_to is not None:
+                print(
+                    "Calibration preview stream "
+                    f"{'ON' if control.preview_changed_to else 'OFF'} "
+                    f"(sent={preview_stream.frames_sent} "
+                    f"dropped={preview_stream.frames_dropped})"
+                )
 
             data = default_payload()
             data["player_locked"] = lock.locked
@@ -358,6 +389,17 @@ def main():
 
             # Send before drawing: Unity should not wait on the debug preview.
             send_payload(sock, data)
+
+            # After the payload, never before: the tracking packet must not
+            # wait on a JPEG encode. No-op unless the calibrate panel is open,
+            # and rate-limited to PREVIEW_FPS while it is.
+            if preview_stream.should_send():
+                # Copy first. The debug preview draws its own overlay on
+                # `frame` further down, and the pitch meter would then be
+                # drawn twice on the same array.
+                preview_frame = frame.copy()
+                draw_pitch_indicator(preview_frame, data.get("head_pitch", 0.0))
+                preview_stream.send(preview_frame)
             t_send = time.perf_counter()
 
             # Everything below is the debug preview — drawing, the macOS HighGUI
@@ -389,6 +431,8 @@ def main():
             # gesture rules, overlay drawing and the UDP send. Measured at
             # ~1ms combined, so it is billed as one stage rather than four.
             # The LSTM runs inside this region, so bill it separately.
+            # The preview encode also lands here, so expect logic to jump by a
+            # few ms on streamed frames — only while the calibrate panel is up.
             logic_ms = (t_send - t_face) * 1000.0 - lstm_ms
             show_ms = (t_show - t_send) * 1000.0
             frame_stats.record(
@@ -434,6 +478,8 @@ def main():
     finally:
         cap.release()
         sock.close()
+        control_sock.close()
+        preview_stream.close()
         cv2.destroyAllWindows()
         hands.close()
         face_mesh.close()

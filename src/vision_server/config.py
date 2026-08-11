@@ -3,6 +3,21 @@
 UDP_IP = "127.0.0.1"
 UDP_PORT = 5052
 
+# Inbound control channel (Unity -> server), see control.py. A second socket
+# rather than a reply on the one above: 5052 is Unity's listen port, so the
+# server cannot bind it. Loopback only — both processes live on the demo
+# machine, and binding 0.0.0.0 would raise a Windows firewall prompt on first
+# run for no gain.
+UDP_CONTROL_IP = "127.0.0.1"
+UDP_CONTROL_PORT = 5053
+# Ceiling on datagrams read per frame. The queue is drained empty every frame,
+# so this is never hit in normal use — it exists so a flood cannot hold the
+# frame loop past its budget.
+UDP_CONTROL_MAX_DATAGRAMS = 32
+# Read buffer per datagram. Control messages are a few dozen bytes; anything
+# larger is not ours and gets truncated rather than growing the buffer.
+UDP_CONTROL_RECV_BYTES = 2048
+
 # Live webcam (not used by file-based Layer B eval).
 CAMERA_INDEX = 0
 # Lower capture size → less MediaPipe cost and less queue lag (device may only
@@ -14,6 +29,39 @@ CAMERA_FPS = 30
 CAMERA_SOFT_RETRIES = 8
 CAMERA_SOFT_RETRY_SLEEP_S = 0.05
 CAMERA_REOPEN_SLEEP_S = 0.4
+
+# Calibration preview stream (server -> Unity), see preview.py. Its own port
+# because the payload is binary JPEG, and feeding that to the JSON parser
+# listening on UDP_PORT would only produce noise.
+#
+# The stream exists so exactly one process opens the webcam. Unity used to run
+# its own WebCamTexture for the calibrate panel, which works on macOS but not
+# on Windows, where camera access is exclusive and the server already holds the
+# device. Sending pictures of the frame the server already has avoids the
+# contention entirely.
+UDP_PREVIEW_PORT = 5054
+# Only streams while the calibrate panel is open, so this is a menu-time cost,
+# not a gameplay one. Still rate-limited: the frame loop is the same one
+# running MediaPipe.
+PREVIEW_FPS = 10.0
+# Match the capture width so Unity receives the same picture the debug preview
+# window shows, at the same aspect, and no resize happens at all. Larger
+# captures are still scaled down to this. Note aspect ratio is preserved either
+# way — a preview that looks stretched in Unity is a RawImage rect that is not
+# 4:3, not a resolution problem.
+PREVIEW_WIDTH = CAMERA_WIDTH
+PREVIEW_JPEG_QUALITY = 50
+# Hard ceiling per datagram. A UDP payload cannot exceed 65507 bytes and
+# sendto would raise; an oversized frame is dropped instead, since the next one
+# is 100ms away. Real 640x480 frames encode to ~8-10KB; only pathological
+# noise approaches this.
+PREVIEW_MAX_BYTES = 60000
+# Socket buffer for the preview stream, both ends. NOT optional: macOS caps a
+# UDP datagram at net.inet.udp.maxdgram (9216 bytes by default) and sendto
+# fails with EMSGSIZE above that, which a full-size JPEG frame clears easily.
+# Raising SO_SNDBUF lifts the cap — measured here as 9216 -> 60000+. Unity must
+# set ReceiveBufferSize to match or the frames arrive truncated.
+PREVIEW_SOCKET_BUFFER_BYTES = 262144
 
 # A frame at or above this counts as stalled, reported as `slow=N` in the
 # [perf] line. ~33ms is one frame at 30fps, so 100ms means the loop lost 3.
