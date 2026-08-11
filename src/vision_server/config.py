@@ -265,7 +265,7 @@ HAND_GESTURE_DEFAULT_OFF_FRAMES = 2
 # reason a dropped frame no longer stands the player up.
 MOVE_GESTURE_OVERRIDES = {"fist": {"on": 1, "off": 2}}
 
-HEAD_TILT_THRESHOLD = 0.5
+HEAD_TILT_THRESHOLD = 0.35
 # Look-up on *calibrated* pitch: head_pitch <= -this (negative = look up).
 # Applied AFTER pitch_neutral subtraction so rest ≈ 0.
 HEAD_LOOK_UP_PITCH_THRESHOLD = 0.15
