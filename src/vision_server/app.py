@@ -14,6 +14,8 @@ from vision_server.config import (
     FRAME_SLOW_MS,
     MAX_NUM_FACES,
     MAX_NUM_HANDS,
+    MEDIAPIPE_HAND_MODEL_COMPLEXITY,
+    MEDIAPIPE_MIN_DETECTION_CONFIDENCE,
     MOVE_GESTURE_OVERRIDES,
     SHOW_PREVIEW,
     UDP_CONTROL_IP,
@@ -127,7 +129,15 @@ def main():
     mp_hands = mp.solutions.hands
     mp_draw = mp.solutions.drawing_utils
 
-    hands = create_hands(max_num_hands=MAX_NUM_HANDS)
+    # Live A/B state for the M and N keys. Starts at the config values, so a
+    # run nobody touches behaves exactly as before.
+    hand_complexity = MEDIAPIPE_HAND_MODEL_COMPLEXITY
+    hand_det_conf = MEDIAPIPE_MIN_DETECTION_CONFIDENCE
+    hands = create_hands(
+        max_num_hands=MAX_NUM_HANDS,
+        model_complexity=hand_complexity,
+        min_detection_confidence=hand_det_conf,
+    )
     face_mesh = create_face_mesh(max_num_faces=MAX_NUM_FACES)
     lstm = GestureLSTM()
     player_lock = PlayerLock()
@@ -167,6 +177,15 @@ def main():
         print(
             "Press H to swap hand roles — action (grab/cursor/LSTM) hand starts "
             f"{hand_roles.action_hand.upper()}."
+        )
+        print(
+            f"Press M to toggle hand model 0/1 (now {hand_complexity}).  "
+            f"Press N to toggle detection confidence 0.7/0.6 "
+            f"(now {hand_det_conf:.1f})."
+        )
+        print(
+            "  Both rebuild MediaPipe (~20-30ms); ignore the [perf] window "
+            "the switch lands in."
         )
     else:
         print("Headless (SHOW_PREVIEW=False): no preview window, no keys.")
@@ -407,6 +426,16 @@ def main():
             key = 0xFF
             if SHOW_PREVIEW:
                 overlay_lines = build_overlay_lines(data, lstm_display)
+                # Burned into the preview on purpose: these runs get recorded
+                # and compared later, and a clip that does not say which
+                # settings produced it is not evidence of anything.
+                overlay_lines.append(
+                    (
+                        f"HAND MODEL: {hand_complexity} (M)   "
+                        f"DET CONF: {hand_det_conf:.1f} (N)",
+                        (0, 255, 255),
+                    )
+                )
                 draw_overlay(frame, overlay_lines)
                 draw_pitch_indicator(frame, data.get("head_pitch", 0.0))
                 draw_lock_ring(
@@ -458,6 +487,32 @@ def main():
                 print(
                     "Puzzle mode "
                     f"{'ON — LSTM predicting' if puzzle_gate.active else 'OFF — LSTM idle'}"
+                )
+            if key in (ord("m"), ord("n")):
+                # Both settings are baked into the graph at construction, so a
+                # switch means rebuilding it. Measured at 17-32ms, and it also
+                # resets MediaPipe's internal hand tracking, so the frame it
+                # happens on is a stall and the [perf] window containing it is
+                # not representative — read the NEXT one when comparing.
+                if key == ord("m"):
+                    hand_complexity = 1 - hand_complexity
+                else:
+                    hand_det_conf = 0.6 if hand_det_conf == 0.7 else 0.7
+                hands.close()
+                hands = create_hands(
+                    max_num_hands=MAX_NUM_HANDS,
+                    model_complexity=hand_complexity,
+                    min_detection_confidence=hand_det_conf,
+                )
+                # The rebuilt graph starts detection from scratch; a buffered
+                # sequence spanning the switch would blend two models' output.
+                lstm.flush()
+                move_debounce.reset()
+                action_debounce.reset()
+                print(
+                    f"[tune] hand model complexity={hand_complexity} "
+                    f"detection confidence={hand_det_conf:.1f} "
+                    f"(M = model, N = confidence)"
                 )
             if key == ord("h"):
                 hand_roles.swap(source="keyboard")

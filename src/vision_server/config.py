@@ -114,10 +114,39 @@ LSTM_MIRRORED_CLASS_SWAP = {
 MODEL_PATH = "models/escape_gestures.keras"
 DATA_DIR = "data"
 
+# TESTED at 0.5 and reverted. In the dark it clearly beat 0.7, but in a lit
+# room it was much worse: background objects got detected as hands. A dark
+# frame hides the clutter that a lit one exposes, so the loosened threshold
+# only pays while evidence is scarce — once the room is lit it admits junk,
+# and MAX_NUM_HANDS=4 gives that junk four slots to fill. Note this
+# constant is shared with the face mesh (tracking/face.py), so 0.5 also
+# loosened face detection; if 0.5 is ever revisited, split the two first so
+# hands and faces can be tuned apart.
+# Use MEDIAPIPE_HAND_MODEL_COMPLEXITY for the dark case instead: it helped at
+# distance without a lighting-dependent downside.
 MEDIAPIPE_MIN_DETECTION_CONFIDENCE = 0.7
 MEDIAPIPE_MIN_TRACKING_CONFIDENCE = 0.7
 # Hand model: 0 = lite (~2x faster, slightly coarser landmarks), 1 = full.
-# Raise to 1 on a machine with CPU headroom (e.g. the demo laptop).
+# Default stays 0; press M in the preview to try 1 live (see app.py). Measured
+# on the Windows demo machine in a dark room, before.mov vs after.mov, ~70-80s
+# each. The gain only appears at DISTANCE — with hands close to the camera both
+# settings track 100%, so a hands-up-close spot check shows no difference and
+# is the wrong test:
+#   tracked over clip:  0 -> 66.3%   1 -> 79.5%
+#   per-5s late in the clip, hands at arm's length in the dark:
+#     0 -> 93 14 62 75  0 12 74  0     (visible hands, simply not found)
+#     1 -> 85  0 82 88 64 68 100 86
+# The cost is real and is NOT free: with two hands up the loop is compute-bound,
+# not camera-bound, so the extra time comes straight off the frame rate.
+#   0: hands med=34ms, total med=50ms, fps 19.2-20.3
+#   1: hands med=56ms, total med=72-75ms, fps 12.9-13.7
+# Left at 0 pending more hands-on time from the team: 1 trades a third of the
+# frame rate for detection at distance, and at 13fps the LSTM gesture window
+# stretches too (NUM_FRAMES is a frame count, not a duration).
+#
+# The cheap alternative was tried and rejected: detection confidence 0.5
+# recovered at-distance detection in the dark for free, but detected background
+# objects as hands once the lights were on.
 MEDIAPIPE_HAND_MODEL_COMPLEXITY = 0
 # NOTE: downscaling the frame before MediaPipe does NOT help. Benchmarking
 # showed 320x240 and 640x480 cost the SAME (~20ms), because MediaPipe resizes
