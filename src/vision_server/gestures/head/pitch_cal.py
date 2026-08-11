@@ -122,9 +122,15 @@ class PitchCalibrator:
             self._window_start = now
 
         self._samples.append((now, raw))
-        # Keep recent samples for median (window slightly longer than target).
+        # Keep recent samples for median (window slightly longer than target),
+        # but never drop below min_samples. Age-only pruning caps the deque at
+        # fps * sample_s * 1.25, so under ~11fps it could never hold the
+        # min_samples that completion requires and calibration hung forever —
+        # measured 6-9fps with Unity running, i.e. always. Keeping the newest
+        # min_samples regardless of age costs nothing at healthy frame rates,
+        # where the window holds far more than the minimum anyway.
         cutoff = now - (self.sample_s * 1.25)
-        while self._samples and self._samples[0][0] < cutoff:
+        while len(self._samples) > self.min_samples and self._samples[0][0] < cutoff:
             self._samples.popleft()
 
         n = len(self._samples)

@@ -118,6 +118,40 @@ def test_dense_camera_frames_still_finish(monkeypatch):
     assert abs(cal.neutral - 0.16) < 0.02
 
 
+def test_low_fps_still_finishes(monkeypatch):
+    """Measured 6-9fps with Unity running; age-only pruning hung there forever.
+
+    At 7fps the 1.875s trim window holds ~13 samples, so a deque pruned purely
+    by age can never reach min_samples=20 and calibration never completes —
+    which is exactly what the demo machine did.
+    """
+    cal = PitchCalibrator(sample_s=1.5, max_std=0.10, min_samples=20)
+    clock = _Clock(0.0)
+    _patch_clock(monkeypatch, clock)
+
+    for _ in range(40):
+        cal.update(locked=True, lock_id=1, raw_pitch=0.22)
+        clock.advance(1.0 / 7.0)
+
+    assert cal.calibrated
+    assert cal.status == "calibrated"
+    assert abs(cal.neutral - 0.22) < 0.02
+
+
+def test_low_fps_waits_for_min_samples_not_just_wall_clock(monkeypatch):
+    """The wall-clock gate alone is not enough — the median needs real samples."""
+    cal = PitchCalibrator(sample_s=1.5, max_std=0.10, min_samples=20)
+    clock = _Clock(0.0)
+    _patch_clock(monkeypatch, clock)
+
+    # 10 frames at 6fps: 1.67s elapsed (past sample_s) but only 10 samples.
+    for _ in range(10):
+        cal.update(locked=True, lock_id=1, raw_pitch=0.22)
+        clock.advance(1.0 / 6.0)
+
+    assert not cal.calibrated
+
+
 def test_apply_to_payload_fields():
     cal = PitchCalibrator(sample_s=0.5, max_std=0.05, min_samples=3)
     data = {
