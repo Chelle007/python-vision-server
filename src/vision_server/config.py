@@ -147,7 +147,7 @@ MEDIAPIPE_MIN_TRACKING_CONFIDENCE = 0.7
 # The cheap alternative was tried and rejected: detection confidence 0.5
 # recovered at-distance detection in the dark for free, but detected background
 # objects as hands once the lights were on.
-MEDIAPIPE_HAND_MODEL_COMPLEXITY = 0
+MEDIAPIPE_HAND_MODEL_COMPLEXITY = 1
 # NOTE: downscaling the frame before MediaPipe does NOT help. Benchmarking
 # showed 320x240 and 640x480 cost the SAME (~20ms), because MediaPipe resizes
 # to its model's fixed input size (~192x192) internally. Recorded here so the
