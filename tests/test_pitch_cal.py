@@ -152,6 +152,45 @@ def test_low_fps_waits_for_min_samples_not_just_wall_clock(monkeypatch):
     assert not cal.calibrated
 
 
+def test_missing_face_is_reported_apart_from_calibrating(monkeypatch):
+    """A player out of frame must not read as calibration in progress.
+
+    Both used to report "calibrating", so the calibrate panel sat on
+    "Calibrating…" indefinitely with nobody in front of the camera.
+    """
+    cal = PitchCalibrator(sample_s=1.5, max_std=0.10, min_samples=20)
+    clock = _Clock(0.0)
+    _patch_clock(monkeypatch, clock)
+
+    cal.update(locked=True, lock_id=1, raw_pitch=0.2)
+    assert cal.status == "calibrating"
+
+    cal.update(locked=True, lock_id=1, raw_pitch=None)
+    assert cal.status == "no_face"
+    assert not cal.calibrated
+
+    # The window survives the blip rather than restarting.
+    for _ in range(40):
+        cal.update(locked=True, lock_id=1, raw_pitch=0.2)
+        clock.advance(1.0 / 7.0)
+    assert cal.status == "calibrated"
+
+
+def test_missing_face_after_calibration_keeps_calibrated(monkeypatch):
+    """Once calibrated, a face blip must not re-open the panel's status."""
+    cal = PitchCalibrator(sample_s=1.5, max_std=0.10, min_samples=20)
+    clock = _Clock(0.0)
+    _patch_clock(monkeypatch, clock)
+    for _ in range(40):
+        cal.update(locked=True, lock_id=1, raw_pitch=0.2)
+        clock.advance(1.0 / 7.0)
+    assert cal.calibrated
+
+    cal.update(locked=True, lock_id=1, raw_pitch=None)
+    assert cal.status != "no_face"
+    assert cal.calibrated
+
+
 def test_apply_to_payload_fields():
     cal = PitchCalibrator(sample_s=0.5, max_std=0.05, min_samples=3)
     data = {

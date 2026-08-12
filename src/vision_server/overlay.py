@@ -59,6 +59,8 @@ def _pitch_cal_message(status: str) -> tuple[str, tuple[int, int, int]] | None:
         )
     if status == "hold_still":
         return ("HOLD STILL - too much head motion", (0, 165, 255))
+    if status == "no_face":
+        return ("NO FACE - move into camera view", (0, 165, 255))
     if status == "calibrated":
         return ("CALIBRATED  (press C to redo)", (0, 255, 0))
     return None

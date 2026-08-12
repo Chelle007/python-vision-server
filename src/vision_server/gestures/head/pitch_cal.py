@@ -30,7 +30,7 @@ class PitchCalibrator:
         self.min_samples = min_samples
         self.neutral = 0.0
         self.calibrated = False
-        self.status = "idle"  # idle | calibrating | hold_still | calibrated
+        self.status = "idle"  # idle | calibrating | hold_still | no_face | calibrated
         self._lock_id = -1
         self._samples: deque[tuple[float, float]] = deque()
         self._window_start: float | None = None
@@ -106,8 +106,11 @@ class PitchCalibrator:
 
         if raw_pitch is None:
             # Face blip during cal: keep waiting, don't corrupt window with fake zeros.
+            # Reported apart from "calibrating" because the two need different
+            # words on screen: one is progress, the other is the player being
+            # out of frame with nothing happening until they come back.
             if not self.calibrated:
-                self.status = "calibrating"
+                self.status = "no_face"
             # Keep last calibrated offset when face briefly drops after cal.
             return 0.0
 
