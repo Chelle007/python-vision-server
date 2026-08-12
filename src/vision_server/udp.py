@@ -63,6 +63,7 @@ def default_payload() -> dict:
         "moveThumbReach": None,
         "actionThumbReach": None,
         "watchTap": False,
+        "watchTapRaw": False,
         "watchTapDistance": None,
         "fistRotX": 0.0,
         "fistRotY": 0.0,

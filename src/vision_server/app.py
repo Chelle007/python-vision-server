@@ -45,7 +45,10 @@ from vision_server.gestures.hand.fingers import (
     thumb_reach,
 )
 from vision_server.gestures.hand.geometry import get_hand_rotation
-from vision_server.gestures.hand.watch_tap import apply_watch_tap_fields
+from vision_server.gestures.hand.watch_tap import (
+    WatchTapDebouncer,
+    apply_watch_tap_fields,
+)
 from vision_server.gestures.head import HEAD_RULES
 from vision_server.gestures.head.pitch_cal import PitchCalibrator
 from vision_server.hand_roles import HandRoles
@@ -156,6 +159,7 @@ def main():
     # player.
     move_debounce = GestureDebouncer(MOVE_GESTURE_OVERRIDES)
     action_debounce = GestureDebouncer(latch=ACTION_GESTURE_LATCH)
+    watch_tap_debounce = WatchTapDebouncer()
     # The latch's only exit when the hand simply leaves — see
     # ACTION_LATCH_HAND_LOST_FRAMES.
     action_hand_lost = 0
@@ -281,6 +285,7 @@ def main():
                 # a held crouch must not survive into the new player's session.
                 move_debounce.reset()
                 action_debounce.reset()
+                watch_tap_debounce.reset()
 
             lstm_display = "Idle"
             # The payload keys stay left*/right*, but they carry ROLES, not
@@ -376,7 +381,9 @@ def main():
                 lstm_ms = (time.perf_counter() - t_lstm) * 1000.0
                 data["lstm_gesture"] = lstm.clamp_label(lstm_display)
 
-            if apply_watch_tap_fields(data, move_landmarks, action_landmarks):
+            if apply_watch_tap_fields(
+                data, move_landmarks, action_landmarks, watch_tap_debounce
+            ):
                 reset_last_point(last_point)
                 lstm_display = "Idle"
                 # A tap suppresses solo gestures; clearing the counters too
@@ -519,6 +526,7 @@ def main():
                 lstm.flush()
                 move_debounce.reset()
                 action_debounce.reset()
+                watch_tap_debounce.reset()
                 print(
                     f"[tune] hand model complexity={hand_complexity} "
                     f"detection confidence={hand_det_conf:.1f} "
@@ -533,6 +541,7 @@ def main():
                 # Each debouncer is now counting a different physical hand.
                 move_debounce.reset()
                 action_debounce.reset()
+                watch_tap_debounce.reset()
                 print(
                     f"Hand roles swapped — ACTION (grab/cursor/LSTM) = "
                     f"{hand_roles.action_hand.upper()}, "

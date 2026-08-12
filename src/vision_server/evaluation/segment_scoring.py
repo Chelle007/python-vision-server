@@ -16,7 +16,7 @@ from vision_server.gestures.hand import (
     classify_hand,
     rules_from_label,
 )
-from vision_server.gestures.hand.watch_tap import is_watch_tap
+from vision_server.gestures.hand.watch_tap import WatchTapDebouncer, is_watch_tap
 from vision_server.tracking import create_hands
 
 # Labels that count toward static-gesture accuracy. Keyed by the name used in
@@ -174,6 +174,7 @@ def score_video_segments(
     # only ever sends debounced booleans to Unity, so scoring the raw rules
     # here would measure a pipeline that does not exist.
     debouncers = {"left": GestureDebouncer(), "right": GestureDebouncer()}
+    watch_tap_debounce = WatchTapDebouncer()
 
     # Per-segment accumulators
     stats: list[dict] = []
@@ -231,7 +232,10 @@ def score_video_segments(
             )
             left_g = rules_from_label(left_label)
             right_g = rules_from_label(right_label)
-            wt = is_watch_tap(left, right)
+            # Debounced, like the solo labels above and like the live server:
+            # scoring the raw test would credit or blame behaviour that never
+            # reaches Unity.
+            wt = watch_tap_debounce.update(is_watch_tap(left, right))
 
             lstm_label = "Idle"
             if right is not None:

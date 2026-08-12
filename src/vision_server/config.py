@@ -288,6 +288,59 @@ INDEX_POINT_CONE = 0.80
 # being judged on unreliable geometry. 0.08 keeps 86% of recorded frames.
 THUMB_UP_MIN_PALM = 0.08
 
+# --- Watch tap (pause) ------------------------------------------------------
+# Distance from the tapping index tip to the watched wrist, in palm lengths
+# (see hand/watch_tap.py). Was a flat 0.09 in image coordinates, which is a
+# fixed slice of the FRAME rather than of the HAND: over test_video_1 the palm
+# measures p5=0.117 / p50=0.178 / p95=0.230, so the same 0.09 ran from 0.5 palm
+# lengths up close to 0.77 as the player leaned back — loosening by half at
+# exactly the distance where the hands are hardest to tell apart. Same bug, and
+# the same fix, as THUMB_SPREAD_RATIO.
+#
+# On the 3 labelled tap segments, contact frames sit at p50 = 0.28 / p75 = 0.32
+# palm lengths, against 1.5 (p50) for frames where the hands are simply both in
+# shot. 0.45 leaves ~1.4x headroom over real contact and stays far below that.
+#
+# The number is deliberately not doing the heavy lifting — the pose gate is.
+# Swept 0.35/0.45/0.55/0.75/1.10 against on-counts 2/3/4/6: with the pose gate
+# on, every combination gives the SAME two triggers outside the labelled tap
+# windows, and both of those are the player's finger already resting on the
+# wrist 0.8s and 2.8s before the window opens (the labels file calls its
+# boundaries approximate). Recall varies by 4 points across that whole grid.
+#
+# What each term is worth, measured over the 2.7 min of non-tap footage as
+# spurious RISING edges, since Unity pauses on the edge and one edge is one
+# unwanted pause:
+#
+#   old rule (0.09 image-space, min(index, middle), no debounce)   8 edges
+#   scale only      (0.55 palms, no pose gate, no debounce)       13 edges
+#   scale + pose    (0.55 palms, no debounce)                      2 edges
+#   scale + pose + debounce (0.55, on=3)                           2 edges
+#
+# Of the old rule's 8, six are genuine: an open palm resting near the wrist
+# (2 edges at 96s) and a fist doing the same during idle (4 edges at 120-121s).
+# The pose gate rejects both outright — neither hand is pointing — which is why
+# it, and not the threshold, is what fixes the gesture. The remaining two are
+# the boundary artifacts above, and they are the only ones the new rule keeps.
+#
+# Recall drops 75% -> 60% of labelled tap frames, and that is the honest cost.
+# It buys back nothing at the segment level (3/3 segments still fire, at every
+# ratio tried) because the loss is concentrated in frames where the hand is
+# approaching or withdrawing inside a generously drawn label window, not in the
+# contact itself.
+WATCH_TAP_RATIO = 0.45
+# Unity pauses on the RISING edge of watchTap, so a single flicker frame is a
+# single unwanted pause and entering slowly is worth the latency — the same
+# reasoning as thumbs_up above, on a gesture nobody makes in a hurry. It earns
+# nothing on the corpus above, where the pose gate has already removed the
+# flicker it defends against; it is kept because that gate is measured on one
+# player in good light, and the cost is 100ms.
+#
+# Leaving is delayed for a different reason: a mid-tap dropout would release
+# and re-arm, and the re-arm is a second rising edge — pause, unpause, pause.
+WATCH_TAP_ON_FRAMES = 3
+WATCH_TAP_OFF_FRAMES = 3
+
 # Commit delay per gesture, in consecutive frames (see hand/debounce.py).
 # Asymmetric on purpose:
 #   on  = frames needed to START the gesture — high for one-shots, so a pose

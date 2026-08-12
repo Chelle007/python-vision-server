@@ -41,6 +41,7 @@ def test_default_payload_has_unity_keys():
         "moveThumbReach",
         "actionThumbReach",
         "watchTap",
+        "watchTapRaw",
         "watchTapDistance",
         "fistRotX",
         "fistRotY",

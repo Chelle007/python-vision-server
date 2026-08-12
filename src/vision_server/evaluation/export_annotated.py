@@ -24,7 +24,10 @@ from vision_server.gestures.hand.cursor_fields import (
     reset_last_point,
 )
 from vision_server.gestures.hand.geometry import get_hand_rotation
-from vision_server.gestures.hand.watch_tap import apply_watch_tap_fields
+from vision_server.gestures.hand.watch_tap import (
+    WatchTapDebouncer,
+    apply_watch_tap_fields,
+)
 from vision_server.overlay import build_overlay_lines, draw_overlay, draw_text_with_bg
 from vision_server.tracking import create_hands
 from vision_server.udp import default_payload
@@ -84,6 +87,7 @@ def export_annotated_video(
     # Same commit delay as the live server, so the exported HUD shows the
     # labels Unity would actually have received rather than the raw rules.
     debouncers = {"left": GestureDebouncer(), "right": GestureDebouncer()}
+    watch_tap_debounce = WatchTapDebouncer()
 
     frame_i = 0
     try:
@@ -174,7 +178,9 @@ def export_annotated_video(
                     lstm_display if lstm_display in lstm.classes else "Idle"
                 )
 
-            if apply_watch_tap_fields(data, left_landmarks, right_landmarks):
+            if apply_watch_tap_fields(
+                data, left_landmarks, right_landmarks, watch_tap_debounce
+            ):
                 reset_last_point(last_point)
                 lstm_display = "Idle"
 
