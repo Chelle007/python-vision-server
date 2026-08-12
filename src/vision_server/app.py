@@ -418,6 +418,16 @@ def main():
                 # drawn twice on the same array.
                 preview_frame = frame.copy()
                 draw_pitch_indicator(preview_frame, data.get("head_pitch", 0.0))
+                # The ring is the answer to "move into camera view": the panel's
+                # text says detection failed, this shows where the server is
+                # actually looking and whether it has locked on.
+                draw_lock_ring(
+                    preview_frame,
+                    status=lock.status,
+                    center=lock.ring_center,
+                    ring_size=lock.ring_size,
+                    progress=lock.progress,
+                )
                 preview_stream.send(preview_frame)
             t_send = time.perf_counter()
 
