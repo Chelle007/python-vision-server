@@ -207,8 +207,43 @@ def test_move_hand_still_tolerates_a_dropped_frame():
 
 
 def test_move_hand_keeps_the_one_shot_and_hold_protections():
-    """Only fist was loosened; everything else is inherited, not restated."""
-    assert set(MOVE_GESTURE_OVERRIDES) == {"fist"}
+    """Only the two movement gestures are loosened; the rest is inherited.
+
+    Guards the point of writing the overrides as a diff: anything added here
+    should be something the player HOLDS, never a one-shot.
+    """
+    assert set(MOVE_GESTURE_OVERRIDES) == {"fist", "rock_sign"}
+
+
+def test_walking_backward_is_as_responsive_as_walking_forward():
+    """Two halves of one control must not have different lag.
+
+    rock_sign was tuned as a one-shot back when it meant "next item" (on=3, so
+    a finger sweeping past could not step the inventory). As walk-backward that
+    delay is felt directly, and felt as an inconsistency with forward, which
+    starts on the first frame.
+    """
+    move = GestureDebouncer(MOVE_GESTURE_OVERRIDES)
+
+    assert move.update("rock_sign") == "rock_sign"
+    assert (
+        MOVE_GESTURE_OVERRIDES["rock_sign"] == MOVE_GESTURE_OVERRIDES["fist"]
+    ), "backward should behave exactly like forward"
+
+
+def test_backward_still_tolerates_a_dropped_frame():
+    """Same floor as forward — faster to release is not the same as unfiltered."""
+    move = GestureDebouncer(MOVE_GESTURE_OVERRIDES)
+    feed(move, "rock_sign", 4)
+    assert move.update(NONE) == "rock_sign"
+
+
+def test_action_hand_rock_sign_keeps_the_one_shot_delay():
+    """MOVE-only, like the fist. The action hand's is unbound and stays slow."""
+    action = GestureDebouncer()
+
+    assert feed(action, "rock_sign", HAND_GESTURE_ON_FRAMES["rock_sign"] - 1) == NONE
+    assert action.update("rock_sign") == "rock_sign"
 
 
 def test_custom_thresholds_are_honoured():

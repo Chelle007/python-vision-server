@@ -232,7 +232,8 @@ Key fields teammates may use:
 | `head_pitch_raw`, `pitch_calibrated`, `pitch_cal_status`, `pitch_cal_neutral` | debug | Raw pitch + cal state (Unity can ignore) |
 | `tilt_left`, `tilt_right`              | bool   | Head roll L/R; hold-to-turn, or snap 180° if looking up |
 | `leftFist`, `leftIndexUp`, `leftPeace` | bool   | Left-hand movement. `leftIndexUp` (jump) now requires pointing **up** — sideways is next/prev below |
-| `leftThumbsUp`, `leftRockSign`         | bool   | Inventory open / next item — one-shots, read the **rising edge** |
+| `leftThumbsUp`                         | bool   | Inventory open — a one-shot, read the **rising edge** |
+| `leftRockSign`                         | bool   | Move backward — *held*, not a one-shot, so it starts and stops on the same counts as walk-forward (see `MOVE_GESTURE_OVERRIDES`). `rightRockSign` keeps the slower one-shot timing |
 | `leftIndexLeft`, `leftIndexRight`      | bool   | Point left / right — inventory prev / next. Also one-shots; direction is screen-relative |
 | `leftIndexDown`, `rightIndexDown`      | bool   | Point down — same cone treatment as the other three; no Unity binding yet |
 | `rightFist`, `rightOpenPalm`           | bool   | Right-hand interaction                 |

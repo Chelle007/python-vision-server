@@ -402,7 +402,22 @@ HAND_GESTURE_DEFAULT_OFF_FRAMES = 2
 # of writing it as an override: jump keeps on=3 because it is the one-shot that
 # phantom-fired, and crouch keeps off=5 because that long release is the whole
 # reason a dropped frame no longer stands the player up.
-MOVE_GESTURE_OVERRIDES = {"fist": {"on": 1, "off": 2}}
+#
+# rock_sign is the same argument, arrived at later. It used to be "next item" —
+# a one-shot, where the tables above give it on=3 so a finger sweeping past
+# cannot step the inventory. It is now walk BACKWARD, which is the fist's
+# profile exactly: held continuously, released constantly, and every frame of
+# delay felt as the player sliding past their mark. Left inherited, backward
+# would start ~3 frames after forward does and stop a frame later, which is a
+# difference the player feels between two halves of the same control.
+#
+# Deliberately MOVE-only, like the fist. rightRockSign keeps the one-shot
+# timing: it is unbound today, and if it is ever bound it will be to a one-shot,
+# because that is what the ACTION hand's gestures are.
+MOVE_GESTURE_OVERRIDES = {
+    "fist": {"on": 1, "off": 2},
+    "rock_sign": {"on": 1, "off": 2},
+}
 
 # Labels on the ACTION hand whose hold does not time out against an unreadable
 # hand. An off-count is a bet that a dropout is short, and for grab that bet is
