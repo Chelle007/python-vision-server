@@ -108,6 +108,33 @@ def _thumb_metrics(landmarks) -> tuple[float | None, float | None]:
     )
 
 
+def reset_for_hand_role_change(
+    *,
+    lstm,
+    last_point,
+    move_debounce,
+    action_debounce,
+    watch_tap_debounce,
+) -> None:
+    """Clear everything that belongs to the hand that just lost its role.
+
+    Swapping roles re-points every piece of per-hand state at a different
+    physical hand, so all of it has to be dropped. The buffered LSTM sequence
+    is the other hand's and is mirrored the other way, keeping it would blend
+    two chiralities; each debouncer's streak was counted on the old hand, so a
+    held crouch or a latched grab would survive the swap and carry over.
+
+    Both callers — the H key and Unity's control message — must run this, which
+    is why it lives here rather than inline. Every debouncer added to the loop
+    needs adding here too, or the swap quietly leaks that one piece of state.
+    """
+    lstm.flush()
+    reset_last_point(last_point)
+    move_debounce.reset()
+    action_debounce.reset()
+    watch_tap_debounce.reset()
+
+
 def _append_hand_packet(data: dict, hand) -> None:
     world = []
     if hand.world_landmarks is not None:
@@ -260,9 +287,25 @@ def main():
                 drain_control_socket(control_sock),
                 pitch_cal=pitch_cal,
                 preview=preview_stream,
+                hand_roles=hand_roles,
             )
             if control.recalibrate_pitch:
                 print("Pitch recalibration requested by Unity — hold still.")
+            if control.hand_roles_changed:
+                # Exactly what the H key does — same function, so the two
+                # cannot drift apart as debouncers are added to the loop.
+                reset_for_hand_role_change(
+                    lstm=lstm,
+                    last_point=last_point,
+                    move_debounce=move_debounce,
+                    action_debounce=action_debounce,
+                    watch_tap_debounce=watch_tap_debounce,
+                )
+                print(
+                    "Hand roles swapped by Unity — ACTION (grab/cursor/LSTM) = "
+                    f"{hand_roles.action_hand.upper()}, "
+                    f"MOVE = {hand_roles.move_hand.upper()}"
+                )
             if control.preview_changed_to is not None:
                 print(
                     "Calibration preview stream "
@@ -534,14 +577,13 @@ def main():
                 )
             if key == ord("h"):
                 hand_roles.swap(source="keyboard")
-                # The buffered sequence belongs to the other hand and is now
-                # mirrored differently — keeping it would blend two chiralities.
-                lstm.flush()
-                reset_last_point(last_point)
-                # Each debouncer is now counting a different physical hand.
-                move_debounce.reset()
-                action_debounce.reset()
-                watch_tap_debounce.reset()
+                reset_for_hand_role_change(
+                    lstm=lstm,
+                    last_point=last_point,
+                    move_debounce=move_debounce,
+                    action_debounce=action_debounce,
+                    watch_tap_debounce=watch_tap_debounce,
+                )
                 print(
                     f"Hand roles swapped — ACTION (grab/cursor/LSTM) = "
                     f"{hand_roles.action_hand.upper()}, "

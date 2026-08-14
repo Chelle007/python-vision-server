@@ -190,6 +190,105 @@ def test_unknown_keys_are_ignored():
     assert pitch_cal.requests == 0
 
 
+# --- Hand roles ------------------------------------------------------------
+
+
+def make_hand_roles():
+    from vision_server.hand_roles import HandRoles
+
+    return HandRoles()
+
+
+def test_absolute_action_hand_is_applied():
+    roles = make_hand_roles()
+
+    result = apply_control_messages(
+        [{"action_hand": "left"}], pitch_cal=FakePitchCal(), hand_roles=roles
+    )
+
+    assert roles.action_hand == "left"
+    assert roles.source == "unity"
+    assert result.hand_roles_changed is True
+
+
+def test_resending_the_current_hand_reports_no_change():
+    """Unity may resend every frame; a repeat must not flush a live gesture."""
+    roles = make_hand_roles()
+    apply_control_messages(
+        [{"action_hand": "left"}], pitch_cal=FakePitchCal(), hand_roles=roles
+    )
+
+    result = apply_control_messages(
+        [{"action_hand": "left"}], pitch_cal=FakePitchCal(), hand_roles=roles
+    )
+
+    assert roles.action_hand == "left"
+    assert result.hand_roles_changed is False
+
+
+def test_swap_hands_command_toggles():
+    """The shape Unity's existing SwapButton already sends."""
+    roles = make_hand_roles()
+    start = roles.action_hand
+
+    result = apply_control_messages(
+        [{"cmd": "swap_hands"}], pitch_cal=FakePitchCal(), hand_roles=roles
+    )
+
+    assert roles.action_hand != start
+    assert result.hand_roles_changed is True
+
+
+def test_swap_and_swap_back_in_one_frame_is_no_change():
+    """Net-zero must not flush: the hand ends where it started."""
+    roles = make_hand_roles()
+    start = roles.action_hand
+
+    result = apply_control_messages(
+        [{"cmd": "swap_hands"}, {"cmd": "swap_hands"}],
+        pitch_cal=FakePitchCal(),
+        hand_roles=roles,
+    )
+
+    assert roles.action_hand == start
+    assert result.hand_roles_changed is False
+
+
+def test_invalid_side_is_ignored_not_raised():
+    """HandRoles raises on a bad side; that must not reach the frame loop."""
+    roles = make_hand_roles()
+    start = roles.action_hand
+
+    result = apply_control_messages(
+        [{"action_hand": "banana"}], pitch_cal=FakePitchCal(), hand_roles=roles
+    )
+
+    assert roles.action_hand == start
+    assert result.hand_roles_changed is False
+
+
+def test_invalid_side_does_not_block_a_later_valid_one():
+    roles = make_hand_roles()
+
+    result = apply_control_messages(
+        [{"action_hand": 42}, {"action_hand": "left"}],
+        pitch_cal=FakePitchCal(),
+        hand_roles=roles,
+    )
+
+    assert roles.action_hand == "left"
+    assert result.hand_roles_changed is True
+
+
+def test_hand_roles_untouched_when_not_passed():
+    """Callers that do not care must not need to know the parameter exists."""
+    result = apply_control_messages(
+        [{"action_hand": "left"}], pitch_cal=FakePitchCal()
+    )
+
+    assert result.hand_roles_changed is False
+
+
 def test_repeats_in_one_frame_collapse_to_one_request():
     """Two presses inside a single frame are one recalibration."""
     pitch_cal = FakePitchCal()

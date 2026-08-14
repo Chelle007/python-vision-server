@@ -49,8 +49,8 @@ class ControlResult:
     """What a frame's worth of control messages actually asked for.
 
     Returned rather than logged so the caller can run side effects the message
-    itself cannot know about — the hand-role swap, when it lands here, has to
-    flush the LSTM and reset both debouncers.
+    itself cannot know about — a hand-role change has to flush the LSTM and
+    reset every debouncer, none of which this module can reach.
     """
 
     recalibrate_pitch: bool = False
@@ -58,6 +58,10 @@ class ControlResult:
     # the same value does not re-log or restart anything. None means the
     # messages this frame said nothing about it.
     preview_changed_to: bool | None = None
+    # True only when the action hand actually ended the frame somewhere new.
+    # A resend of the current side, or a swap and swap-back inside one frame,
+    # leaves this False so the caller does not flush a live gesture for nothing.
+    hand_roles_changed: bool = False
 
 
 def create_control_socket(
@@ -117,11 +121,41 @@ def drain_control_socket(
     return messages
 
 
+def _apply_hand_roles(messages: list[dict], hand_roles) -> bool:
+    """Apply hand-role messages; return True if the action hand actually moved.
+
+    Two shapes are accepted. ``{"action_hand": "left"}`` is the one to prefer:
+    absolute, so a duplicated or dropped datagram cannot desync Unity's display
+    from the server, and safe to resend every frame. ``{"cmd": "swap_hands"}``
+    is a relative toggle kept for the existing Unity button — it works, but a
+    lost datagram leaves the two sides disagreeing about which hand is which.
+
+    The verdict compares the side before and after the whole batch rather than
+    trusting the setters, so a swap and a swap-back inside one frame correctly
+    reports no change and spares a live gesture the flush.
+    """
+    before = hand_roles.action_hand
+
+    for msg in messages:
+        if "action_hand" in msg:
+            try:
+                hand_roles.set_action_hand(msg["action_hand"], source="unity")
+            except ValueError:
+                # Not a side. Anything can arrive on an open UDP port, and a
+                # typo from Unity must not take the frame loop down.
+                continue
+        elif msg.get("cmd") == "swap_hands":
+            hand_roles.swap(source="unity")
+
+    return hand_roles.action_hand != before
+
+
 def apply_control_messages(
     messages: list[dict],
     *,
     pitch_cal,
     preview=None,
+    hand_roles=None,
 ) -> ControlResult:
     """Apply a frame's control messages to server state.
 
@@ -143,7 +177,12 @@ def apply_control_messages(
         if wanted is not None and preview.set_active(wanted, source="unity"):
             preview_changed_to = wanted
 
+    hand_roles_changed = (
+        _apply_hand_roles(messages, hand_roles) if hand_roles is not None else False
+    )
+
     return ControlResult(
         recalibrate_pitch=recalibrate,
         preview_changed_to=preview_changed_to,
+        hand_roles_changed=hand_roles_changed,
     )
