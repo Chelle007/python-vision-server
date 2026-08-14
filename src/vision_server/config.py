@@ -18,6 +18,37 @@ UDP_CONTROL_MAX_DATAGRAMS = 32
 # larger is not ours and gets truncated rather than growing the buffer.
 UDP_CONTROL_RECV_BYTES = 2048
 
+# Gesture coach report (server -> Unity). TCP, not UDP: one dropped datagram
+# would lose a whole session's stats. Port 5053 is already the UDP *control*
+# channel (Unity -> server), so this cannot share it.
+TCP_REPORT_IP = "127.0.0.1"
+TCP_REPORT_PORT = 5055
+TCP_REPORT_CONNECT_S = 0.4
+
+# Retroactive labelling window. When a gesture finally commits, frames in this
+# lookback are treated as attempts at it. Idle players never commit, so they
+# never enter the data — a known, accepted bias.
+GESTURE_REPORT_LOOKBACK_S = 2.0
+# Wrist–middle-MCP length in image-normalised coords. Below this the hand is
+# in frame but too far back for stable classification.
+GESTURE_REPORT_MIN_PALM = 0.08
+# Size-normalised mean landmark step. Above this, tracking is jumpy
+# (motion, autofocus, MediaPipe noise) — not a brightness reading.
+GESTURE_REPORT_JITTER = 0.045
+# Mean luma (0–255) of the hand crop, or the whole frame if no hands.
+# Below this the Lighting chip is "bad". Webcam auto-exposure can hide a
+# dark room, so this is still a proxy — just not landmark jitter.
+GESTURE_REPORT_DARK_MEAN = 48.0
+# Coach pain-list row ids. Click is Unity-only and is filled on that side.
+GESTURE_REPORT_ROWS = (
+    "jump",
+    "crouch",
+    "inventory",
+    "grab",
+    "watch_tap",
+    "pull_lever",
+)
+
 # Live webcam (not used by file-based Layer B eval).
 CAMERA_INDEX = 0
 # Lower capture size → less MediaPipe cost and less queue lag (device may only

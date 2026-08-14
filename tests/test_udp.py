@@ -60,6 +60,7 @@ def test_default_payload_has_unity_keys():
         "action_hand",
         "move_hand",
         "hand_roles_source",
+        "track_confident",
     }
     assert set(data.keys()) == expected_keys
 

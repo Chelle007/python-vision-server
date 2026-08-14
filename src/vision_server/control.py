@@ -62,6 +62,9 @@ class ControlResult:
     # A resend of the current side, or a swap and swap-back inside one frame,
     # leaves this False so the caller does not flush a live gesture for nothing.
     hand_roles_changed: bool = False
+    # Unity asking for the session gesture_report over TCP 5055.
+    request_gesture_report: bool = False
+    chamber: int | None = None
 
 
 def create_control_socket(
@@ -181,8 +184,22 @@ def apply_control_messages(
         _apply_hand_roles(messages, hand_roles) if hand_roles is not None else False
     )
 
+    request_gesture_report = False
+    chamber = None
+    for msg in messages:
+        cmd = msg.get("cmd")
+        if cmd == "gesture_report" or msg.get("request_gesture_report"):
+            request_gesture_report = True
+        if "chamber" in msg:
+            try:
+                chamber = int(msg["chamber"])
+            except (TypeError, ValueError):
+                continue
+
     return ControlResult(
         recalibrate_pitch=recalibrate,
         preview_changed_to=preview_changed_to,
         hand_roles_changed=hand_roles_changed,
+        request_gesture_report=request_gesture_report,
+        chamber=chamber,
     )

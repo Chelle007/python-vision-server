@@ -18,6 +18,8 @@ from vision_server.config import (
     MEDIAPIPE_MIN_DETECTION_CONFIDENCE,
     MOVE_GESTURE_OVERRIDES,
     SHOW_PREVIEW,
+    TCP_REPORT_IP,
+    TCP_REPORT_PORT,
     UDP_CONTROL_IP,
     UDP_CONTROL_PORT,
     UDP_IP,
@@ -28,6 +30,7 @@ from vision_server.control import (
     create_control_socket,
     drain_control_socket,
 )
+from vision_server.gesture_report import GestureDiagnostics, send_report_tcp
 from vision_server.gestures.dynamic import GestureLSTM
 from vision_server.gestures.hand import (
     NONE,
@@ -54,6 +57,7 @@ from vision_server.gestures.head.pitch_cal import PitchCalibrator
 from vision_server.hand_roles import HandRoles
 from vision_server.overlay import (
     build_overlay_lines,
+    draw_hand_skeleton,
     draw_lock_ring,
     draw_overlay,
     draw_pitch_indicator,
@@ -191,6 +195,7 @@ def main():
     # ACTION_LATCH_HAND_LOST_FRAMES.
     action_hand_lost = 0
     frame_stats = FrameStats()
+    gesture_diag = GestureDiagnostics()
 
     # Threaded reader drops stale buffered frames while MediaPipe runs.
     cap = LatestFrameCamera()
@@ -198,6 +203,10 @@ def main():
 
     print(f"Combined Vision Server Running. Sending UDP to {UDP_IP}:{UDP_PORT}")
     print(f"Listening for Unity control messages on {UDP_CONTROL_IP}:{UDP_CONTROL_PORT}")
+    print(
+        "Gesture reports sent over TCP "
+        f"{TCP_REPORT_IP}:{TCP_REPORT_PORT} when Unity asks"
+    )
     print(
         f"Camera negotiated: {cam_w}x{cam_h} @ {cam_fps:.0f} fps "
         f"(requested {CAMERA_WIDTH}x{CAMERA_HEIGHT} @ {CAMERA_FPS})"
@@ -313,6 +322,10 @@ def main():
                     f"(sent={preview_stream.frames_sent} "
                     f"dropped={preview_stream.frames_dropped})"
                 )
+            if control.chamber is not None:
+                gesture_diag.set_chamber(control.chamber)
+            if control.request_gesture_report:
+                send_report_tcp(gesture_diag.build_report(control.chamber))
 
             data = default_payload()
             data["player_locked"] = lock.locked
@@ -329,6 +342,7 @@ def main():
                 move_debounce.reset()
                 action_debounce.reset()
                 watch_tap_debounce.reset()
+                gesture_diag.reset()
 
             lstm_display = "Idle"
             # The payload keys stay left*/right*, but they carry ROLES, not
@@ -342,17 +356,9 @@ def main():
 
             if move is not None:
                 _append_hand_packet(data, move)
-                if SHOW_PREVIEW:
-                    mp_draw.draw_landmarks(
-                        frame, move.mp_landmarks, mp_hands.HAND_CONNECTIONS
-                    )
 
             if action is not None:
                 _append_hand_packet(data, action)
-                if SHOW_PREVIEW:
-                    mp_draw.draw_landmarks(
-                        frame, action.mp_landmarks, mp_hands.HAND_CONNECTIONS
-                    )
 
             # Classify each hand once, then let the commit delay decide what
             # Unity actually sees. A missing hand is fed NONE rather than
@@ -399,6 +405,20 @@ def main():
             data["actionThumbClear"], data["actionThumbReach"] = _thumb_metrics(
                 action_landmarks
             )
+
+            if SHOW_PREVIEW:
+                if move is not None:
+                    draw_hand_skeleton(
+                        frame, mp_draw, mp_hands, move.mp_landmarks, True
+                    )
+                if action is not None:
+                    draw_hand_skeleton(
+                        frame,
+                        mp_draw,
+                        mp_hands,
+                        action.mp_landmarks,
+                        gesture_diag.track_confident,
+                    )
 
             if action is not None:
                 lstm.register_hand_seen()
@@ -455,6 +475,23 @@ def main():
                 pitch_cal.apply_to_payload(data, data.get("head_pitch", 0.0))
             else:
                 pitch_cal.apply_to_payload(data, None)
+
+            gesture_diag.update(
+                move_landmarks=move_landmarks,
+                action_landmarks=action_landmarks,
+                move_raw=move_debounce.raw,
+                move_committed=move_label,
+                move_candidate=move_debounce.candidate,
+                action_raw=action_debounce.raw,
+                action_committed=action_label,
+                action_candidate=action_debounce.candidate,
+                watch_raw=bool(data.get("watchTapRaw")),
+                watch_committed=bool(data.get("watchTap")),
+                lstm=str(data.get("lstm_gesture") or "Idle"),
+                puzzle=bool(data.get("puzzle_active")),
+                frame=frame,
+            )
+            data["track_confident"] = gesture_diag.track_confident
 
             # Send before drawing: Unity should not wait on the debug preview.
             send_payload(sock, data)

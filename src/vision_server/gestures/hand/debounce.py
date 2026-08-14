@@ -98,6 +98,16 @@ class GestureDebouncer:
         self._streak = 0
         self._away = 0
 
+    @property
+    def candidate(self) -> str:
+        """Incoming label currently being counted toward commit."""
+        return self._candidate
+
+    @property
+    def streak(self) -> int:
+        """Consecutive frames of ``candidate``."""
+        return self._streak
+
     def reset(self) -> None:
         """Drop all state back to "no gesture", committing immediately.
 

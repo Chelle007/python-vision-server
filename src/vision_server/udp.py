@@ -84,6 +84,9 @@ def default_payload() -> dict:
         "player_locked": False,
         "lock_id": 0,
         "lock_status": "unlocked",
+        # Tutorial skeleton tint. True when the ACTION hand is in frame, large
+        # enough, and not jittering. No numbers — Unity just paints green/red.
+        "track_confident": False,
     }
 
 

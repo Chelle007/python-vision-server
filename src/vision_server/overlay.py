@@ -318,6 +318,19 @@ def draw_pitch_indicator(
     )
 
 
+def draw_hand_skeleton(frame, mp_draw, mp_hands, mp_landmarks, confident: bool) -> None:
+    """Tutorial-style skeleton: green when tracking is solid, red when not."""
+    color = (0, 255, 0) if confident else (0, 0, 255)
+    spec = mp_draw.DrawingSpec(color=color, thickness=2, circle_radius=2)
+    mp_draw.draw_landmarks(
+        frame,
+        mp_landmarks,
+        mp_hands.HAND_CONNECTIONS,
+        spec,
+        spec,
+    )
+
+
 def draw_overlay(frame, overlay_lines: list[tuple[str, tuple[int, int, int]]]) -> None:
     s = _ui_scale(frame)
     # Base values matched ~720p; shrink with frame height for 640x480 etc.
