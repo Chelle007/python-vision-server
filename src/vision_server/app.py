@@ -17,7 +17,6 @@ from vision_server.config import (
     MEDIAPIPE_HAND_MODEL_COMPLEXITY,
     MEDIAPIPE_MIN_DETECTION_CONFIDENCE,
     MOVE_GESTURE_OVERRIDES,
-    SHOW_PREVIEW,
     TCP_REPORT_IP,
     TCP_REPORT_PORT,
     UDP_CONTROL_IP,
@@ -25,6 +24,7 @@ from vision_server.config import (
     UDP_IP,
     UDP_PORT,
 )
+from vision_server.cli import parse_args, prepare_frozen_cwd, resolve_show_preview
 from vision_server.control import (
     apply_control_messages,
     create_control_socket,
@@ -152,7 +152,11 @@ def _append_hand_packet(data: dict, hand) -> None:
     )
 
 
-def main():
+def main(argv=None):
+    args = parse_args(argv)
+    prepare_frozen_cwd()
+    show_preview = resolve_show_preview(args)
+
     apply_opencv_threads()
     sock = create_udp_socket()
     # Inbound half of the link. Non-blocking, drained once per frame below.
@@ -211,7 +215,7 @@ def main():
         f"Camera negotiated: {cam_w}x{cam_h} @ {cam_fps:.0f} fps "
         f"(requested {CAMERA_WIDTH}x{CAMERA_HEIGHT} @ {CAMERA_FPS})"
     )
-    if SHOW_PREVIEW:
+    if show_preview:
         print("Press Q to quit.  Press C to recalibrate look pitch neutral.")
         print("Press P to toggle puzzle mode (LSTM inference) — starts OFF.")
         print(
@@ -228,7 +232,7 @@ def main():
             "the switch lands in."
         )
     else:
-        print("Headless (SHOW_PREVIEW=False): no preview window, no keys.")
+        print("Headless: no preview window, no keys.")
         print("Press Ctrl-C to quit. Pitch recalibration comes from Unity.")
         print(
             "Hand roles fixed at ACTION = "
@@ -406,7 +410,7 @@ def main():
                 action_landmarks
             )
 
-            if SHOW_PREVIEW:
+            if show_preview:
                 if move is not None:
                     draw_hand_skeleton(
                         frame, mp_draw, mp_hands, move.mp_landmarks, True
@@ -521,7 +525,7 @@ def main():
             # Everything below is the debug preview — drawing, the macOS HighGUI
             # event loop, and the keyboard. None of it is needed by Unity.
             key = 0xFF
-            if SHOW_PREVIEW:
+            if show_preview:
                 overlay_lines = build_overlay_lines(data, lstm_display)
                 # Burned into the preview on purpose: these runs get recorded
                 # and compared later, and a clip that does not say which

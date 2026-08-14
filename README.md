@@ -67,6 +67,9 @@ pip install pytest
 source .venv/bin/activate
 python scripts/run_server.py
 # or: vision-server
+
+# Player-style run (no desktop webcam window; Unity calibrate panel still works):
+python scripts/run_server.py --headless
 ```
 
 - A webcam window opens with gesture overlays
@@ -244,6 +247,20 @@ Key fields teammates may use:
 | `lstm_gesture`                         | string | `Idle`, `Turn_Key`, `Pull_Lever`, `Turn_Around_CW`, `Turn_Around_CCW` |
 | `hands[]`                              | array  | Per-hand landmarks + world landmarks   |
 
+
+---
+
+## Windows player freeze (teammate on a Windows PC)
+
+Do **not** run this on macOS. PyInstaller must freeze on Windows.
+
+1. Put `models/escape_gestures.keras` in `models/` (gitignored; copy it over).
+2. One-time venv (Python 3.11): `py -3.11 -m venv .venv` then `pip install -r requirements.txt` and `pip install -e .`
+3. Double-click `scripts/build_windows.bat` (or run it from a prompt).
+4. Copy the whole `dist/VisionServer` folder next to the Unity game `.exe`.
+5. Launch the **game**. Unity starts `VisionServer/vision-server.exe` hidden. No OpenCV window, no console, no training files.
+
+Unity Editor play-mode does **not** auto-start the server — keep using `python scripts/run_server.py` while developing.
 
 ---
 
