@@ -25,9 +25,8 @@ it would be applied late.
 
 Adding a message type is deliberately small: extend :class:`ControlResult` and
 add a branch in :func:`apply_control_messages`. ``HandRoles.set_action_hand``
-and ``PuzzleGate.set_active`` are the next two callers, and both are already
-shaped for it — idempotent setters that report whether they actually changed
-anything, so Unity can resend freely.
+and ``PuzzleGate.set_active`` are both idempotent setters that report whether
+they actually changed anything, so Unity can resend freely.
 """
 
 from __future__ import annotations
@@ -65,6 +64,8 @@ class ControlResult:
     # Unity asking for the session gesture_report over TCP 5055.
     request_gesture_report: bool = False
     chamber: int | None = None
+    # True/False only when the puzzle gate actually flipped this frame.
+    puzzle_gate_changed_to: bool | None = None
 
 
 def create_control_socket(
@@ -159,6 +160,7 @@ def apply_control_messages(
     pitch_cal,
     preview=None,
     hand_roles=None,
+    puzzle_gate=None,
 ) -> ControlResult:
     """Apply a frame's control messages to server state.
 
@@ -196,10 +198,20 @@ def apply_control_messages(
             except (TypeError, ValueError):
                 continue
 
+    puzzle_gate_changed_to = None
+    if puzzle_gate is not None:
+        wanted = None
+        for msg in messages:
+            if "puzzle_active" in msg:
+                wanted = bool(msg["puzzle_active"])
+        if wanted is not None and puzzle_gate.set_active(wanted, source="unity"):
+            puzzle_gate_changed_to = wanted
+
     return ControlResult(
         recalibrate_pitch=recalibrate,
         preview_changed_to=preview_changed_to,
         hand_roles_changed=hand_roles_changed,
         request_gesture_report=request_gesture_report,
         chamber=chamber,
+        puzzle_gate_changed_to=puzzle_gate_changed_to,
     )

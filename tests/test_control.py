@@ -289,6 +289,63 @@ def test_hand_roles_untouched_when_not_passed():
     assert result.hand_roles_changed is False
 
 
+def test_puzzle_active_opens_the_gate():
+    from vision_server.puzzle_gate import PuzzleGate
+
+    gate = PuzzleGate(active=False)
+    result = apply_control_messages(
+        [{"puzzle_active": True}],
+        pitch_cal=FakePitchCal(),
+        puzzle_gate=gate,
+    )
+
+    assert gate.active is True
+    assert gate.source == "unity"
+    assert result.puzzle_gate_changed_to is True
+
+
+def test_resending_puzzle_active_reports_no_change():
+    from vision_server.puzzle_gate import PuzzleGate
+
+    gate = PuzzleGate(active=False)
+    apply_control_messages(
+        [{"puzzle_active": True}],
+        pitch_cal=FakePitchCal(),
+        puzzle_gate=gate,
+    )
+
+    result = apply_control_messages(
+        [{"puzzle_active": True}],
+        pitch_cal=FakePitchCal(),
+        puzzle_gate=gate,
+    )
+
+    assert gate.active is True
+    assert result.puzzle_gate_changed_to is None
+
+
+def test_puzzle_active_false_closes_the_gate():
+    from vision_server.puzzle_gate import PuzzleGate
+
+    gate = PuzzleGate(active=True)
+    result = apply_control_messages(
+        [{"puzzle_active": False}],
+        pitch_cal=FakePitchCal(),
+        puzzle_gate=gate,
+    )
+
+    assert gate.active is False
+    assert result.puzzle_gate_changed_to is False
+
+
+def test_puzzle_gate_untouched_when_not_passed():
+    result = apply_control_messages(
+        [{"puzzle_active": True}], pitch_cal=FakePitchCal()
+    )
+
+    assert result.puzzle_gate_changed_to is None
+
+
 def test_repeats_in_one_frame_collapse_to_one_request():
     """Two presses inside a single frame are one recalibration."""
     pitch_cal = FakePitchCal()

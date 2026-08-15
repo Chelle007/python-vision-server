@@ -7,9 +7,9 @@ is the leading suspect behind the soft webcam grab failures ``camera.py`` now
 has to recover from.
 
 The gate is one piece of state behind one setter, so the trigger source can
-change without touching the LSTM call site. Today a keypress flips it; later
-Unity flips it over UDP when a puzzle starts and ends. Both are just callers of
-:meth:`PuzzleGate.set_active`.
+change without touching the LSTM call site. Unity flips it over UDP when the
+player enters or leaves a puzzle zone; P still toggles it from the keyboard.
+Both are just callers of :meth:`PuzzleGate.set_active`.
 """
 
 from __future__ import annotations

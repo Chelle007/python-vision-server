@@ -180,7 +180,7 @@ def main(argv=None):
     lstm = GestureLSTM()
     player_lock = PlayerLock()
     pitch_cal = PitchCalibrator()
-    # Keyboard-driven for now; Unity becomes a second caller of set_active().
+    # Keyboard P still toggles; Unity also opens/closes the gate over UDP.
     puzzle_gate = PuzzleGate()
     # Same deal: H swaps the hands today, Unity's settings screen later.
     hand_roles = HandRoles()
@@ -301,6 +301,7 @@ def main(argv=None):
                 pitch_cal=pitch_cal,
                 preview=preview_stream,
                 hand_roles=hand_roles,
+                puzzle_gate=puzzle_gate,
             )
             if control.recalibrate_pitch:
                 print("Pitch recalibration requested by Unity — hold still.")
@@ -325,6 +326,12 @@ def main(argv=None):
                     f"{'ON' if control.preview_changed_to else 'OFF'} "
                     f"(sent={preview_stream.frames_sent} "
                     f"dropped={preview_stream.frames_dropped})"
+                )
+            if control.puzzle_gate_changed_to is not None:
+                print(
+                    "Puzzle mode "
+                    f"{'ON — LSTM predicting' if control.puzzle_gate_changed_to else 'OFF — LSTM idle'} "
+                    "(Unity)"
                 )
             if control.chamber is not None:
                 gesture_diag.set_chamber(control.chamber)
