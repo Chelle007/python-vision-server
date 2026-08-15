@@ -441,7 +441,11 @@ def main(argv=None):
                 # Buffer keeps filling either way; only inference is gated.
                 t_lstm = time.perf_counter()
                 lstm_display = lstm.predict(
-                    action_landmarks, infer=puzzle_gate.active, mirror=mirror
+                    action_landmarks,
+                    infer=puzzle_gate.active,
+                    mirror=mirror,
+                    grabbing=action_gestures["fist"],
+                    puzzle_classes_only=True,
                 )
                 lstm_ms = (time.perf_counter() - t_lstm) * 1000.0
                 data["lstm_gesture"] = lstm.clamp_label(lstm_display)

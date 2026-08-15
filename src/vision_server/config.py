@@ -116,6 +116,16 @@ NUM_FEATURES = 63  # 21 landmarks * (x, y, z)
 
 LSTM_BUFFER_SIZE = NUM_FRAMES
 LSTM_CONFIDENCE_THRESHOLD = 0.8
+# Softer Pull_Lever cutoff while the action fist is already committed.
+# Fist is not treated as a pull on its own: argmax must still be Pull_Lever.
+# 0.6 sits under the 0.8 Idle floor so a slow/partial pull can land, but
+# stays high enough that a grab plus a weak Turn_Key/Idle score cannot.
+LSTM_GRAB_PULL_LEVER_THRESHOLD = 0.6
+# Live ATM puzzle only uses Pull_Lever. A hand filling the frame looks like a
+# wide circle to the 5-class model, so Turn_Around_* (and unused Turn_Key)
+# steal argmax and the grab floor never applies. Restrict + renormalise only
+# on the live puzzle path; Layer A/B keep the full softmax.
+LSTM_PUZZLE_ALLOWED_CLASSES = ("Idle", "Pull_Lever")
 # Only wipe the sequence buffer after a sustained right-hand loss (seconds).
 # Brief MediaPipe dropouts must not force a full 30-frame refill.
 LSTM_HAND_MISS_CLEAR_S = 1.0

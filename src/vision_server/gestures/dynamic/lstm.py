@@ -7,8 +7,10 @@ from vision_server.config import (
     LSTM_ACTION_MAX_HOLD_S,
     LSTM_BUFFER_SIZE,
     LSTM_CONFIDENCE_THRESHOLD,
+    LSTM_GRAB_PULL_LEVER_THRESHOLD,
     LSTM_HAND_MISS_CLEAR_S,
     LSTM_MIRRORED_CLASS_SWAP,
+    LSTM_PUZZLE_ALLOWED_CLASSES,
     MODEL_PATH,
 )
 from vision_server.features import flatten_landmarks
@@ -38,6 +40,7 @@ class GestureLSTM:
         model_path=MODEL_PATH,
         buffer_size=LSTM_BUFFER_SIZE,
         confidence_threshold=LSTM_CONFIDENCE_THRESHOLD,
+        grab_pull_threshold=LSTM_GRAB_PULL_LEVER_THRESHOLD,
         hand_miss_clear_s=LSTM_HAND_MISS_CLEAR_S,
         action_max_hold_s=LSTM_ACTION_MAX_HOLD_S,
     ):
@@ -48,6 +51,7 @@ class GestureLSTM:
         self.frame_buffer = deque(maxlen=buffer_size)
         self.buffer_size = buffer_size
         self.confidence_threshold = confidence_threshold
+        self.grab_pull_threshold = grab_pull_threshold
         self.hand_miss_clear_s = hand_miss_clear_s
         self.action_max_hold_s = action_max_hold_s
         self._hand_miss_started_at = None
@@ -112,9 +116,67 @@ class GestureLSTM:
 
         return raw_label
 
-    def predict(self, landmarks, *, infer: bool = True, mirror: bool = False):
+    def _decide_label(
+        self,
+        class_id: int,
+        confidence: float,
+        *,
+        grabbing: bool = False,
+        mirror: bool = False,
+    ) -> str:
+        """Map argmax + score to a class. Grab only lowers the Pull_Lever floor."""
+        raw_label = self.classes[class_id]
+        if mirror:
+            # Mirroring reversed the on-screen turn direction; undo it on the
+            # label so a class always means the same motion the player made.
+            raw_label = LSTM_MIRRORED_CLASS_SWAP.get(raw_label, raw_label)
+
+        threshold = self.confidence_threshold
+        if grabbing and raw_label == "Pull_Lever":
+            threshold = self.grab_pull_threshold
+
+        if confidence > threshold:
+            return raw_label
+        return "Idle"
+
+    def _label_from_probs(
+        self,
+        probs,
+        *,
+        grabbing: bool = False,
+        mirror: bool = False,
+        puzzle_classes_only: bool = False,
+    ) -> str:
+        scores = [float(x) for x in probs]
+        if puzzle_classes_only:
+            allowed = LSTM_PUZZLE_ALLOWED_CLASSES
+            scores = [
+                s if self.classes[i] in allowed else 0.0
+                for i, s in enumerate(scores)
+            ]
+            total = sum(scores)
+            if total > 1e-8:
+                scores = [s / total for s in scores]
+        class_id = max(range(len(scores)), key=lambda i: scores[i])
+        return self._decide_label(
+            class_id, scores[class_id], grabbing=grabbing, mirror=mirror
+        )
+
+    def predict(
+        self,
+        landmarks,
+        *,
+        infer: bool = True,
+        mirror: bool = False,
+        grabbing: bool = False,
+        puzzle_classes_only: bool = False,
+    ):
         """Classify the rolling window. ``mirror`` reflects a left action hand
-        into right-hand geometry before buffering (see ``flatten_landmarks``)."""
+        into right-hand geometry before buffering (see ``flatten_landmarks``).
+
+        ``grabbing`` is the committed action-hand fist. It never invents a
+        pull; it only accepts a weaker Pull_Lever score when that class won.
+        """
         if self.model is None:
             return "No Model"
 
@@ -140,18 +202,12 @@ class GestureLSTM:
         input_data = np.array([list(self.frame_buffer)], dtype="float32")
         prediction = self.model.predict_on_batch(input_data)
 
-        class_id = int(np.argmax(prediction))
-        confidence = float(prediction[0][class_id])
-
-        if confidence > self.confidence_threshold:
-            raw_label = self.classes[class_id]
-        else:
-            raw_label = "Idle"
-
-        if mirror:
-            # Mirroring reversed the on-screen turn direction; undo it on the
-            # label so a class always means the same motion the player made.
-            raw_label = LSTM_MIRRORED_CLASS_SWAP.get(raw_label, raw_label)
+        raw_label = self._label_from_probs(
+            prediction[0],
+            grabbing=grabbing,
+            mirror=mirror,
+            puzzle_classes_only=puzzle_classes_only,
+        )
 
         self.last_output = self._apply_action_hold(raw_label)
         return self.last_output
