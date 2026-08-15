@@ -236,55 +236,41 @@ FINGER_CURL_MARGIN = 0.10
 # than by the thumb.
 THUMB_SPREAD_RATIO = 0.6
 
-# --- Thumbs-up (inventory open) -------------------------------------------
-# A thumbs-up has the same four-finger pattern as a fist, so the thumb splits
-# them: distance from the thumb tip to the nearest curled fingertip, in palm
-# lengths (see fingers.thumb_clearance). With the fingers balled, a tucked
-# thumb is physically resting on them and a raised one is out in clear air, so
-# the question is simply "is the thumb out", with no reference to which way it
-# points.
+# --- OK sign (inventory open) ----------------------------------------------
+# Thumb tip touching index tip with the other three fingers extended, measured
+# as the distance between those two tips in palm lengths (see
+# fingers.pinch_distance).
 #
-# That framing matters more than the number. Two earlier versions measured
-# thumb DIRECTION against the hand's wrist -> knuckles axis, and both read
-# obvious thumbs-ups as fists: the gesture is normally made with the fist
-# rolled sideways, which leaves the thumb near-perpendicular to that axis and
-# drives any angular measure toward the fist end of its range. Distance between
-# two landmarks has no such failure mode.
+# This gesture replaced a thumbs-up, and the reason is the FINGER PATTERN, not
+# the threshold. A thumbs-up curls all four fingers, so it presents the same
+# pattern as a fist and the thumb alone had to break the tie. That tie could
+# not be broken reliably: the thumb is the one digit whose 3D pose survives
+# least well in a 2D projection, and every candidate measurement — clearance
+# from the fingertips, reach from its own base, rise along the hand's axis —
+# either read real thumbs-ups as fists or read relaxed fists as thumbs-ups.
+# Since fist on the MOVE hand is walk-forward, both failures were expensive:
+# one opened the inventory mid-stride, the other stopped the player dead.
 #
-# Clearance alone is not enough, and the reason is worth recording: the
-# spurious triggers do NOT come from the gripping clips as expected, they come
-# overwhelmingly from Idle (4.4/min vs 0-1/min for Turn_Key and Pull_Lever). A
-# hand at rest holds its fingers loosely curled with the thumb lying naturally
-# apart from them, which is clearance without a thumbs-up — and a resting hand
-# is exactly what the MOVE hand does most of the time. So the thumb must also
-# be EXTENDED, not merely apart. See fingers.thumb_reach.
+# The OK sign curls the index and extends the other three. No other gesture in
+# the set uses that pattern, so the tie never has to be broken and no amount of
+# thumb noise can turn a walk into a menu.
 #
-# On the 11.5k fist-pattern frames in data/ (well-measured hands only, see
-# THUMB_UP_MIN_PALM) a fist sits at clearance p50 = 0.21 / p95 = 0.55 and reach
-# p50 = 0.71, against roughly 0.8 clearance and 1.1-1.4 reach extended.
-#
-# Spurious RISING EDGES — inventory pop-opens — over the 19.2 min of recorded
-# gameplay, since one edge is one wrong menu. The hold below is the third term
-# and the cheapest of the three, because a deliberate gesture is held for
-# roughly a second while idle noise is transient:
-#
-#   clearance/reach   on=4   on=6   on=8     (spurious opens per minute)
-#   0.60 / 0.95       0.99   0.52   0.47
-#   0.70 / 0.95       0.57   0.36   0.31   <- chosen, ~1 per 3.2 min
-#   0.70 / 1.05       0.57   0.36   0.21
-#
-# Reach is kept deliberately loose. It is worth about a third of the remaining
-# false positives (8 -> 6 edges at on=8) and tightening it to 1.05 would halve
-# them again, but a real thumbs-up measures around 1.0-1.4 and the low end of
-# that is too close to 1.05 to spend the recall on.
-#
-# CAVEAT: the corpus contains no thumbs-up recordings, so all of this is
-# calibrated against false positives ONLY. scripts/calibrate_thumbs_up.py
-# measures both sides against your own hand; the live overlay prints both
-# numbers on every fist-pattern frame, which is the quickest way to see where
-# yours land.
-THUMB_UP_CLEARANCE = 0.70
-THUMB_UP_REACH = 0.95
+# The pinch is only a confirmation. It separates the OK sign from the one other
+# pose sharing the pattern — three fingers up with the index simply folded down
+# — where the thumb rests by the palm rather than on the index tip. Touching
+# pads measure ~0.10-0.25 palm lengths (a fingertip is about 0.15 wide, so the
+# two landmarks cannot reach 0 even pressed hard together) against ~0.8 and up
+# with the thumb parked. 0.35 sits in the empty middle of that gap.
+OK_SIGN_PINCH = 0.35
+# hand_frame only rejects a hand with NO measurable axis (0.02), which leaves
+# badly foreshortened hands whose small palm length distorts every ratio
+# divided by it — on the recorded corpus those frames are the whole tail,
+# reaching an impossible 5.8 palm lengths. That matters here in the direction
+# that costs a false open: a hand pointing at the camera projects every
+# landmark on top of every other, so an unpinched thumb can still land within
+# OK_SIGN_PINCH. Below this floor the hand is not eligible for the gesture at
+# all. 0.08 keeps 86% of recorded frames.
+OK_SIGN_MIN_PALM = 0.08
 
 # --- Pointing (inventory next / back) --------------------------------------
 # One extended index used to be a single gesture. It is now four, split by
@@ -312,12 +298,6 @@ THUMB_UP_REACH = 0.95
 # point-down, so that is the whole false-fire surface, and it is well under the
 # 3-frame commit delay below.
 INDEX_POINT_CONE = 0.80
-# hand_frame only rejects a hand with NO measurable axis (0.02), which leaves
-# badly foreshortened hands whose small palm length inflates every ratio
-# divided by it — on the corpus those frames are the whole tail, reaching an
-# impossible 5.8 palm lengths. Below this, the hand stays a fist rather than
-# being judged on unreliable geometry. 0.08 keeps 86% of recorded frames.
-THUMB_UP_MIN_PALM = 0.08
 
 # --- Watch tap (pause) ------------------------------------------------------
 # Distance from the tapping index tip to the watched wrist, in palm lengths
@@ -362,7 +342,7 @@ THUMB_UP_MIN_PALM = 0.08
 WATCH_TAP_RATIO = 0.45
 # Unity pauses on the RISING edge of watchTap, so a single flicker frame is a
 # single unwanted pause and entering slowly is worth the latency — the same
-# reasoning as thumbs_up above, on a gesture nobody makes in a hurry. It earns
+# reasoning as ok_sign above, on a gesture nobody makes in a hurry. It earns
 # nothing on the corpus above, where the pose gate has already removed the
 # flicker it defends against; it is kept because that gate is measured on one
 # player in good light, and the cost is 100ms.
@@ -386,12 +366,17 @@ HAND_GESTURE_ON_FRAMES = {
     "open_palm": 2,
     "index_up": 3,
     # Both are UI one-shots (open inventory / next slot), so they enter slowly:
-    # nobody notices a quarter-second of latency opening a menu. For thumbs_up
-    # the hold is a first-class part of the detection rather than just filter
-    # hygiene — see THUMB_UP_CLEARANCE. 8 frames is ~260ms against the ~1s a
-    # player actually holds the pose, and it is the cheapest of the three terms
-    # because it costs latency instead of recall.
-    "thumbs_up": 8,
+    # nobody notices a quarter-second of latency opening a menu, and the hand
+    # passes through half-formed poses on the way into either one.
+    #
+    # ok_sign used to be thumbs_up at 8 frames, where the long hold was doing
+    # real detection work rather than filter hygiene — it was the third term
+    # propping up a thumb measurement that could not separate the gesture from
+    # a fist on its own. The OK sign is separated by its finger pattern instead
+    # (see OK_SIGN_PINCH), so the hold is back to being ordinary debouncing and
+    # 5 frames (~165ms) is enough to ride out the curl of the index on the way
+    # in without making the menu feel sluggish.
+    "ok_sign": 5,
     "rock_sign": 3,
     # Same one-shot reasoning as rock_sign, and they share its exposure to a
     # finger sweeping past on the way somewhere else.
@@ -405,9 +390,10 @@ HAND_GESTURE_OFF_FRAMES = {
     "peace": 5,
     "open_palm": 3,
     "index_up": 2,
-    # Held while the menu is read, and dropping out of thumbs_up on the MOVE
-    # hand lands back on fist = walk forward, so releasing is worth delaying.
-    "thumbs_up": 4,
+    # Held while the menu is read, and the pose relaxes by opening the pinch,
+    # which passes through patterns that are not gestures. Releasing slowly
+    # keeps the menu from flickering shut mid-read.
+    "ok_sign": 4,
     "rock_sign": 3,
     "index_left": 3,
     "index_right": 3,

@@ -11,7 +11,7 @@ Python backend for **Gaming with Bare Hands** (CSIT321 FYP). Captures webcam inp
 | -------------------------------------- | ------------------------------------------------------------------- |
 | **MediaPipe Hands**                    | Tracks 21 landmarks per hand (up to 2 hands)                        |
 | **MediaPipe Face Mesh**                | Head yaw/pitch for camera control                                   |
-| **Hand heuristics** (`gestures/hand/`) | Static gestures — fist, open palm, index up, peace, thumbs up, rock sign, rotation |
+| **Hand heuristics** (`gestures/hand/`) | Static gestures — fist, open palm, index up, peace, OK sign, rock sign, rotation |
 | **Head heuristics** (`gestures/head/`) | Head orientation (yaw/pitch); extensible for nod/shake/tilt         |
 | **LSTM** (`gestures/dynamic/`)         | Dynamic gestures — Idle, Turn_Key, Pull_Lever, Turn_Around_CW/CCW |
 | **UDP**                                | Sends JSON every frame to Unity at `127.0.0.1:5052`                 |
@@ -235,13 +235,13 @@ Key fields teammates may use:
 | `head_pitch_raw`, `pitch_calibrated`, `pitch_cal_status`, `pitch_cal_neutral` | debug | Raw pitch + cal state (Unity can ignore) |
 | `tilt_left`, `tilt_right`              | bool   | Head roll L/R; hold-to-turn, or snap 180° if looking up |
 | `leftFist`, `leftIndexUp`, `leftPeace` | bool   | Left-hand movement. `leftIndexUp` (jump) now requires pointing **up** — sideways is next/prev below |
-| `leftThumbsUp`                         | bool   | Inventory open — a one-shot, read the **rising edge** |
+| `leftOkSign`                           | bool   | Inventory open — a one-shot, read the **rising edge**. Replaced a thumbs-up, which shared the fist's finger pattern and so competed with walk-forward; the OK sign has a pattern of its own (see `OK_SIGN_PINCH`) |
 | `leftRockSign`                         | bool   | Move backward — *held*, not a one-shot, so it starts and stops on the same counts as walk-forward (see `MOVE_GESTURE_OVERRIDES`). `rightRockSign` keeps the slower one-shot timing |
 | `leftIndexLeft`, `leftIndexRight`      | bool   | Point left / right — inventory prev / next. Also one-shots; direction is screen-relative |
 | `leftIndexDown`, `rightIndexDown`      | bool   | Point down — same cone treatment as the other three; no Unity binding yet |
 | `rightFist`, `rightOpenPalm`           | bool   | Right-hand interaction                 |
 | `rightIndexUp`                         | bool   | Right-hand index up (e.g. stand from sit) |
-| `rightThumbsUp`, `rightRockSign`       | bool   | Same two gestures on the action hand (sent for symmetry; unused so far) |
+| `rightOkSign`, `rightRockSign`         | bool   | Same two gestures on the action hand (sent for symmetry; unused so far) |
 | `palmX`, `palmY`                       | float  | Right palm screen position             |
 | `fistRotX/Y/Z`                         | float  | Right-hand rotation (inspect)          |
 | `lstm_gesture`                         | string | `Idle`, `Turn_Key`, `Pull_Lever`, `Turn_Around_CW`, `Turn_Around_CCW` |

@@ -16,9 +16,14 @@ including any pattern containing an ambiguous finger, is ``NONE``. A transition
 is no longer a gesture — it is the absence of one, which is what the debouncer
 needs in order to keep holding the previous label.
 
-Two gestures do not fall out of the four-finger pattern alone. ``rock_sign`` is
-just another pattern, but ``thumbs_up`` shares the fist's — all four fingers
-curled — so the thumb has to break the tie. See :func:`_is_thumbs_up`.
+Every gesture here falls out of the four-finger pattern, and where a pattern is
+not the whole story the thumb only ever *confirms* the label the pattern already
+named — it never has to choose between two of them. That is a deliberate
+constraint on the gesture set rather than an accident of it: the previous
+inventory gesture was a thumbs-up, which shares the fist's all-curled pattern
+and so left the thumb arbitrating between "open the menu" and "walk forward".
+No measurement of the thumb was reliable enough to arbitrate anything. The OK
+sign that replaced it has a pattern of its own.
 
 The individual ``is_*`` rules in this package are now thin views onto this
 function, so the registry, the eval harness and the live server can no longer
@@ -29,10 +34,9 @@ from __future__ import annotations
 
 from vision_server.config import (
     INDEX_POINT_CONE,
+    OK_SIGN_MIN_PALM,
+    OK_SIGN_PINCH,
     THUMB_SPREAD_RATIO,
-    THUMB_UP_CLEARANCE,
-    THUMB_UP_MIN_PALM,
-    THUMB_UP_REACH,
 )
 
 from .fingers import (
@@ -40,8 +44,7 @@ from .fingers import (
     finger_states,
     hand_frame,
     index_direction,
-    thumb_clearance,
-    thumb_reach,
+    pinch_distance,
     thumb_spread,
 )
 
@@ -50,14 +53,16 @@ NONE = "none"
 # (index, middle, ring, pinky) -> label. Exhaustive by intent: a pattern absent
 # from this table is deliberately not a gesture.
 #
-# The thumb is not in the pattern, so "fist" here means only "all four fingers
-# curled" — a thumbs-up matches it too, and is split back out below.
+# The thumb is not in the pattern. Both entries whose pose depends on it —
+# open_palm and ok_sign — are confirmed against it below, and failing that
+# check reports NONE rather than falling through to another gesture.
 _PATTERN_TO_LABEL: dict[tuple[bool, bool, bool, bool], str] = {
     (False, False, False, False): "fist",
     (True, False, False, False): "index_up",
     (True, True, False, False): "peace",
     (True, True, True, True): "open_palm",
     (True, False, False, True): "rock_sign",
+    (False, True, True, True): "ok_sign",
 }
 
 # Payload/rule names, in registry order. Every label here is emitted as its own
@@ -70,50 +75,30 @@ LABELS = (
     "index_left",
     "index_right",
     "index_down",
-    "thumbs_up",
+    "ok_sign",
     "rock_sign",
 )
 
 
-def _is_thumbs_up(landmarks, frame) -> bool:
-    """Split a thumbs-up out of the all-fingers-curled pattern.
+def _is_ok_sign(landmarks, frame) -> bool:
+    """Confirm the OK sign's pattern by checking the ring is actually closed.
 
-    Deliberately one-sided: only a clearly raised, clearly outheld thumb wins,
-    and everything else stays ``fist``. Fist on the MOVE hand is walk-forward —
-    the most-used gesture in the game — so the cost of a wrong answer is very
-    lopsided, and an unrecognised thumbs-up (player re-does it) is much cheaper
-    than a fist that stops the player walking.
+    The pattern — index curled, middle/ring/pinky extended — is already unique
+    to this gesture. What it does not distinguish is an OK sign from three
+    fingers held up with the index simply folded away, so the thumb is asked
+    one question: is it touching the index tip.
 
-    The palm floor is the same reasoning. ``hand_frame`` only rejects a hand
-    with no measurable axis at all (0.02), which leaves a band of badly
-    foreshortened hands whose palm length is small enough to inflate every
-    ratio divided by it — on the recorded corpus those frames are the entire
-    tail, reaching a nonsensical 5.8 palm lengths. Rather than loosen the
-    thresholds to cover noise, a hand that cannot be measured properly simply
-    is not eligible to be a thumbs-up.
-
-    Two questions, both about distance and neither about direction: is the
-    thumb held clear of the curled fingers, and is it actually extended rather
-    than merely resting apart from them. Clearance alone fires on a relaxed
-    idle hand, which is the single biggest source of spurious triggers.
-
-    Nothing here references which WAY the thumb points. Two earlier versions
-    did — how far the tip rose along the hand's axis, and how far it sat off to
-    the side — and both rejected obvious thumbs-ups, because the gesture is
-    normally made with the fist rolled so the thumb runs nearly perpendicular
-    to that axis. Everything angular about the hand was doing harm; a distance
-    between two landmarks reads the same at any wrist angle.
+    The palm floor guards the direction that costs a wrong menu. A hand aimed
+    at the camera projects its landmarks on top of one another, which shrinks
+    an unpinched gap just as effectively as closing it would; below the floor
+    the geometry cannot tell those apart, so the hand is not eligible.
     """
     _, palm_len = frame
-    if palm_len < THUMB_UP_MIN_PALM:
+    if palm_len < OK_SIGN_MIN_PALM:
         return False
 
-    clearance = thumb_clearance(landmarks, frame)
-    if clearance is None or clearance < THUMB_UP_CLEARANCE:
-        return False
-
-    reach = thumb_reach(landmarks, frame)
-    return reach is not None and reach >= THUMB_UP_REACH
+    pinch = pinch_distance(landmarks, frame)
+    return pinch is not None and pinch <= OK_SIGN_PINCH
 
 
 def _pointing_label(landmarks) -> str:
@@ -169,9 +154,9 @@ def classify_hand(landmarks) -> str:
     if label == "open_palm" and thumb_spread(landmarks, frame) < THUMB_SPREAD_RATIO:
         return NONE
 
-    # Four curled fingers is the same pattern for both, so the thumb decides.
-    if label == "fist" and _is_thumbs_up(landmarks, frame):
-        return "thumbs_up"
+    # The pattern names the OK sign; the closed ring is what confirms it.
+    if label == "ok_sign" and not _is_ok_sign(landmarks, frame):
+        return NONE
 
     # One extended index is four gestures, told apart by where it points.
     if label == "index_up":

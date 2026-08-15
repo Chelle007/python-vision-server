@@ -18,8 +18,8 @@ from vision_server.gestures.hand.index_right import is_index_right
 from vision_server.gestures.hand.index_up import is_index_up
 from vision_server.gestures.hand.open_palm import is_open_palm
 from vision_server.gestures.hand.peace import is_peace_sign
+from vision_server.gestures.hand.ok_sign import is_ok_sign
 from vision_server.gestures.hand.rock_sign import is_rock_sign
-from vision_server.gestures.hand.thumbs_up import is_thumbs_up
 from conftest import hand_pose
 
 
@@ -33,7 +33,7 @@ def test_hand_rules_registry_contains_expected_gestures():
         "index_left",
         "index_right",
         "index_down",
-        "thumbs_up",
+        "ok_sign",
         "rock_sign",
     }
 
@@ -79,61 +79,63 @@ def test_open_palm_requires_thumb_spread():
     assert classify_hand(landmarks) == NONE
 
 
-# --- Thumbs-up vs fist -----------------------------------------------------
-# These share a finger pattern (all four curled), so every test here is really
-# about the thumb deciding between them.
+# --- OK sign (inventory) ---------------------------------------------------
+# Index curled, the other three extended, thumb closing the ring. The pattern
+# is unique to this gesture; the thumb only confirms it.
 
 
-def test_is_thumbs_up():
-    assert is_thumbs_up(hand_pose(thumb_up=True)) is True
+def _ok_sign(**kwargs):
+    return hand_pose(middle=True, ring=True, pinky=True, thumb_pinch=True, **kwargs)
 
 
-def test_thumbs_up_is_not_a_fist():
-    """The whole point of the split: Unity must not see walk-forward."""
-    landmarks = hand_pose(thumb_up=True)
+def test_is_ok_sign():
+    assert is_ok_sign(_ok_sign()) is True
+
+
+def test_ok_sign_does_not_collide_with_walking():
+    """The reason this gesture replaced a thumbs-up.
+
+    A thumbs-up curls all four fingers, so it arrived at the classifier wearing
+    the fist's pattern and the thumb had to arbitrate between "open the menu"
+    and "walk forward". The OK sign leaves three fingers extended, so a fist
+    can never be mistaken for it no matter what the thumb is doing — which is
+    what the second half of this test pins down.
+    """
+    landmarks = _ok_sign()
     assert is_fist(landmarks) is False
-    assert classify_hand(landmarks) == "thumbs_up"
+    assert classify_hand(landmarks) == "ok_sign"
 
-
-def test_tucked_thumb_fist_stays_a_fist():
-    """Walking is the most-used gesture; the split must not cost it."""
-    assert is_fist(hand_pose()) is True
-    assert is_thumbs_up(hand_pose()) is False
-
-
-def test_spread_thumb_alone_is_not_thumbs_up():
-    """An open palm's thumb is held out sideways but not raised."""
-    assert is_thumbs_up(hand_pose(thumb_out=True)) is False
-
-
-def test_thumbs_up_does_not_depend_on_thumb_direction():
-    """Regression: two earlier versions measured which WAY the thumb pointed.
-
-    Both read obvious thumbs-ups as fists, because the gesture is normally made
-    with the fist rolled so the thumb runs nearly perpendicular to the wrist ->
-    knuckles axis. Every placement below is a thumb held well clear of the
-    curled fingers, differing only in direction, and all of them must count.
-    """
+    # Every placement below is a thumb held well clear of the curled fingers,
+    # i.e. exactly the poses the old thumbs-up rule was trying to catch. All of
+    # them are now plain fists, so walking survives them.
     for tip in ((-0.45, 1.60), (-0.77, 1.58), (-1.05, 1.05), (-1.25, 0.55)):
-        assert is_thumbs_up(hand_pose(thumb_tip_at=tip)) is True, tip
+        assert classify_hand(hand_pose(thumb_tip_at=tip)) == "fist", tip
 
 
-def test_thumbs_up_survives_wrist_rotation():
-    """Measured in the hand's own frame, so a tilted thumbs-up still counts."""
+def test_open_ring_is_not_an_ok_sign():
+    """Three fingers up with the thumb parked is the pose the pinch excludes."""
+    landmarks = hand_pose(middle=True, ring=True, pinky=True, thumb_out=True)
+    assert is_ok_sign(landmarks) is False
+    assert classify_hand(landmarks) == NONE
+
+
+def test_ok_sign_survives_wrist_rotation():
+    """Both tips are read in the hand's own frame, so a tilted OK still counts."""
     for degrees in (0, 45, 90, 180, 270):
-        assert is_thumbs_up(hand_pose(thumb_up=True, rotation_deg=degrees)) is True, degrees
+        assert is_ok_sign(_ok_sign(rotation_deg=degrees)) is True, degrees
 
 
-def test_foreshortened_thumbs_up_falls_back_to_fist():
-    """Below the palm floor the thumb geometry is noise, so do not trust it.
+def test_foreshortened_ok_sign_is_no_gesture():
+    """Below the palm floor a hand aimed at the camera fakes a closed ring.
 
-    A hand this badly foreshortened still has a measurable axis, so it is not
-    rejected outright — it just is not eligible to be a thumbs-up, and stays
-    on the incumbent reading of the same finger pattern.
+    The projection collapses every landmark toward every other, so an open
+    pinch measures the same as a shut one. Such a hand still has a measurable
+    axis, so it is not rejected outright — it simply is not eligible, and the
+    frame reports NONE rather than falling through to a neighbouring gesture.
     """
-    landmarks = hand_pose(thumb_up=True, scale=0.4)
-    assert is_thumbs_up(landmarks) is False
-    assert classify_hand(landmarks) == "fist"
+    landmarks = _ok_sign(scale=0.4)
+    assert is_ok_sign(landmarks) is False
+    assert classify_hand(landmarks) == NONE
 
 
 # --- Pointing left / right -------------------------------------------------
@@ -233,7 +235,7 @@ def test_exactly_one_gesture_fires_per_hand():
         hand_pose(index=True),
         hand_pose(index=True, middle=True),
         hand_pose(index=True, middle=True, ring=True, pinky=True, thumb_out=True),
-        hand_pose(thumb_up=True),
+        _ok_sign(),
         hand_pose(index=True, pinky=True),
         hand_pose(index=True, rotation_deg=90),
         hand_pose(index=True, rotation_deg=270),

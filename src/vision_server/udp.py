@@ -29,7 +29,7 @@ def default_payload() -> dict:
         "leftOpenPalm": False,
         "leftIndexUp": False,
         "leftPeace": False,
-        "leftThumbsUp": False,
+        "leftOkSign": False,
         "leftRockSign": False,
         "leftIndexLeft": False,
         "leftIndexRight": False,
@@ -38,7 +38,7 @@ def default_payload() -> dict:
         "rightOpenPalm": False,
         "rightIndexUp": False,
         "rightPeace": False,
-        "rightThumbsUp": False,
+        "rightOkSign": False,
         "rightRockSign": False,
         "rightIndexLeft": False,
         "rightIndexRight": False,
@@ -52,16 +52,13 @@ def default_payload() -> dict:
         "moveGestureRaw": "none",
         "actionGesture": "none",
         "actionGestureRaw": "none",
-        # The two numbers that decide fist vs thumbs_up, in palm lengths: thumb
-        # tip to the nearest curled fingertip, and thumb tip to its own base
-        # (see THUMB_UP_CLEARANCE / THUMB_UP_REACH). None when the hand is
-        # absent or too foreshortened to measure. Unity ignores these; they
-        # stay in the packet so a thumbs-up that failed to fire can be diagnosed
-        # from a capture — the preview no longer draws them.
-        "moveThumbClear": None,
-        "actionThumbClear": None,
-        "moveThumbReach": None,
-        "actionThumbReach": None,
+        # Thumb tip to index tip in palm lengths, the number that confirms the
+        # OK sign (see OK_SIGN_PINCH). None when the hand is absent or too
+        # foreshortened to measure. Unity ignores it; it stays in the packet so
+        # an OK sign that failed to fire can be diagnosed from a capture — the
+        # preview no longer draws it.
+        "movePinch": None,
+        "actionPinch": None,
         "watchTap": False,
         "watchTapRaw": False,
         "watchTapDistance": None,

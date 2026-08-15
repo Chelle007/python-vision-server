@@ -22,13 +22,12 @@ from vision_server.tracking import create_hands
 # Labels that count toward static-gesture accuracy. Keyed by the name used in
 # the clip annotations, so an entry with no annotated segments simply never
 # scores — the inventory gestures are listed ahead of the clips being recorded,
-# which is also what makes their miss rate measurable at all (they were
-# calibrated against false positives only; see THUMB_UP_CLEARANCE).
+# which is also what makes their miss rate measurable at all.
 STATIC_LABELS = {
     "leftFist": ("left", "fist"),
     "leftIndexUp": ("left", "index_up"),
     "leftPeace": ("left", "peace"),
-    "leftThumbsUp": ("left", "thumbs_up"),
+    "leftOkSign": ("left", "ok_sign"),
     "leftRockSign": ("left", "rock_sign"),
     "leftIndexLeft": ("left", "index_left"),
     "leftIndexRight": ("left", "index_right"),

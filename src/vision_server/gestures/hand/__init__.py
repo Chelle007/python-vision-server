@@ -20,10 +20,10 @@ from . import (  # noqa: E402, F401
     index_left,
     index_right,
     index_up,
+    ok_sign,
     open_palm,
     peace,
     rock_sign,
-    thumbs_up,
 )
 
 # Each rule above is a view onto the same winner-take-all classifier, so the

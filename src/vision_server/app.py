@@ -44,8 +44,7 @@ from vision_server.gestures.hand.cursor_fields import (
 )
 from vision_server.gestures.hand.fingers import (
     hand_frame,
-    thumb_clearance,
-    thumb_reach,
+    pinch_distance,
 )
 from vision_server.gestures.hand.geometry import get_hand_rotation
 from vision_server.gestures.hand.watch_tap import (
@@ -90,26 +89,22 @@ def _landmark_dicts(landmarks) -> list[dict]:
     ]
 
 
-def _thumb_metrics(landmarks) -> tuple[float | None, float | None]:
-    """Diagnostic ``(clearance, reach)`` for one hand, in palm lengths.
+def _pinch_metric(landmarks) -> float | None:
+    """Diagnostic thumb-tip to index-tip gap for one hand, in palm lengths.
 
-    These two are the whole fist/thumbs-up decision, so putting them in the
-    payload turns "the gesture will not fire" into a pair of readings that can
-    be compared against THUMB_UP_CLEARANCE / THUMB_UP_REACH on the spot.
+    This is what confirms the OK sign, so putting it in the payload turns "the
+    inventory will not open" into a reading that can be compared against
+    OK_SIGN_PINCH on the spot.
     """
     if landmarks is None:
-        return None, None
+        return None
 
     frame = hand_frame(landmarks)
     if frame is None:
-        return None, None
+        return None
 
-    clearance = thumb_clearance(landmarks, frame)
-    reach = thumb_reach(landmarks, frame)
-    return (
-        None if clearance is None else round(clearance, 2),
-        None if reach is None else round(reach, 2),
-    )
+    pinch = pinch_distance(landmarks, frame)
+    return None if pinch is None else round(pinch, 2)
 
 
 def reset_for_hand_role_change(
@@ -390,32 +385,28 @@ def main(argv=None):
             data["leftOpenPalm"] = move_gestures["open_palm"]
             data["leftIndexUp"] = move_gestures["index_up"]
             data["leftPeace"] = move_gestures["peace"]
-            data["leftThumbsUp"] = move_gestures["thumbs_up"]
+            data["leftOkSign"] = move_gestures["ok_sign"]
             data["leftRockSign"] = move_gestures["rock_sign"]
             data["leftIndexLeft"] = move_gestures["index_left"]
             data["leftIndexRight"] = move_gestures["index_right"]
             data["leftIndexDown"] = move_gestures["index_down"]
             data["moveGesture"] = move_label
             data["moveGestureRaw"] = move_debounce.raw
-            data["moveThumbClear"], data["moveThumbReach"] = _thumb_metrics(
-                move_landmarks
-            )
+            data["movePinch"] = _pinch_metric(move_landmarks)
 
             action_gestures = rules_from_label(action_label)
             data["rightFist"] = action_gestures["fist"]
             data["rightOpenPalm"] = action_gestures["open_palm"]
             data["rightIndexUp"] = action_gestures["index_up"]
             data["rightPeace"] = action_gestures["peace"]
-            data["rightThumbsUp"] = action_gestures["thumbs_up"]
+            data["rightOkSign"] = action_gestures["ok_sign"]
             data["rightRockSign"] = action_gestures["rock_sign"]
             data["rightIndexLeft"] = action_gestures["index_left"]
             data["rightIndexRight"] = action_gestures["index_right"]
             data["rightIndexDown"] = action_gestures["index_down"]
             data["actionGesture"] = action_label
             data["actionGestureRaw"] = action_debounce.raw
-            data["actionThumbClear"], data["actionThumbReach"] = _thumb_metrics(
-                action_landmarks
-            )
+            data["actionPinch"] = _pinch_metric(action_landmarks)
 
             if show_preview:
                 if move is not None:

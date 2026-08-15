@@ -37,7 +37,7 @@ ISSUE_POOR_LIGHTING = "POOR_LIGHTING"
 ISSUE_DWELL_TOO_SHORT = "DWELL_TOO_SHORT"
 
 # MOVE / ACTION classifier label -> pain row.
-_MOVE_ROWS = {"index_up": "jump", "peace": "crouch", "thumbs_up": "inventory"}
+_MOVE_ROWS = {"index_up": "jump", "peace": "crouch", "ok_sign": "inventory"}
 _ACTION_ROWS = {"fist": "grab"}
 _LEVER = "Pull_Lever"
 

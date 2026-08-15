@@ -47,7 +47,7 @@ def hand_pose(
     ring=False,
     pinky=False,
     thumb_out=False,
-    thumb_up=False,
+    thumb_pinch=False,
     thumb_tip_at=None,
     rotation_deg=0.0,
     scale=1.0,
@@ -101,22 +101,24 @@ def hand_pose(
         landmarks[dip_i] = place(across_at, (pip_along + tip_along) / 2.0)
         landmarks[tip_i] = place(across_at, tip_along)
 
-    # Three thumb placements, in (across, along) palm lengths. The index MCP is
-    # at (-0.32, 0.98), and classify splits a thumbs-up from a fist by where the
-    # tip sits relative to *that* point, so the three have to differ in the way
-    # real thumbs do:
+    # Three thumb placements, in (across, along) palm lengths. Only two gestures
+    # look at the thumb at all, and they ask opposite questions — open_palm
+    # wants it far from the palm centre, ok_sign wants it on the index tip — so
+    # the placements differ in the way real thumbs do:
     #   tucked   — folded over the curled fingers, tip level with the knuckles
-    #   out      — spread sideways for an open palm, but no higher
-    #   up       — standing clear above the knuckle line and held out to the side
+    #   out      — spread sideways for an open palm
+    #   pinch    — pad to pad with a curled index, closing the ring
     if thumb_tip_at is not None:
         # Explicit (across, along) for tests that probe a specific thumb
         # placement rather than one of the three canonical poses.
         thumb_tip = thumb_tip_at
-    elif thumb_up:
-        # 0.45 out and 0.60 up from the index MCP: a comfortably typical
-        # thumbs-up rather than one placed to just clear the threshold, so
-        # tightening it is a test failure rather than a silent loss of recall.
-        thumb_tip = (-0.77, 1.58)
+    elif thumb_pinch:
+        # A curled index puts its tip at (-0.32, 0.885), so this sits about 0.10
+        # palm lengths off it — pads touching, which is as close as two
+        # fingertip landmarks physically get. Deliberately not placed right on
+        # top of it: a fixture that only passes at zero would hide how much
+        # slack OK_SIGN_PINCH really has.
+        thumb_tip = (-0.22, 0.90)
     elif thumb_out:
         thumb_tip = (-0.85, 1.05)
     else:
