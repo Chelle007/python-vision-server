@@ -30,53 +30,95 @@ Python backend for **Gaming with Bare Hands** (CSIT321 FYP). Captures webcam inp
 
 ## Requirements
 
-- Python **3.11** (recommended)
+- **Python 3.11** (required — not 3.12 or 3.13)
 - Webcam
 - Unity game running with `UDPReceiver.cs` on port **5052**
+
+> **Players running the shipped `.exe`:** you do **not** need Python. Unity bundles `VisionServer/vision-server.exe`. The steps below are for **development** only.
 
 ---
 
 ## Setup (first time)
 
-```bash
+Run in **Command Prompt** or **PowerShell** from the repo root:
+
+```bat
 cd python-vision-server
-
-python3.11 -m venv .venv
-source .venv/bin/activate        # macOS / Linux
-# .venv\Scripts\activate         # Windows
-
-# 1. Pinned deps (TensorFlow, NumPy 1.26.x, MediaPipe — required for LSTM train/load)
+py -3.11 -m venv .venv
+.venv\Scripts\activate
+pip install --upgrade pip
 pip install -r requirements.txt
-
-# 2. Install this repo as a package (imports + vision-server commands)
 pip install -e .
+```
 
-# Optional: run tests
+Optional — tests:
+
+```bat
 pip install pytest
 ```
 
-> Use **Python 3.11**. `requirements.txt` pins versions that work together (e.g. NumPy 1.26.4 with TensorFlow 2.16.2).
+<details>
+<summary>macOS / Linux</summary>
+
+```bash
+cd python-vision-server
+python3.11 -m venv .venv
+source .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+pip install -e .
+pip install pytest
+```
+
+</details>
+
+> Use **Python 3.11** exactly. `requirements.txt` pins versions that work together (e.g. NumPy 1.26.4 with TensorFlow 2.16.2). If you already have newer TensorFlow/MediaPipe installed globally, use a **fresh** `.venv` or run `pip install -r requirements.txt --force-reinstall` inside the venv.
 
 ---
 
 ## Run the Vision Server
 
-**Start Unity first**, then:
+**Start Unity first**, then activate the venv and run:
+
+```bat
+.venv\Scripts\activate
+python scripts\run_server.py
+```
+
+To use a different webcam, pass its index:
+
+```bat
+python scripts\run_server.py --camera-index 1
+```
+
+Headless (no OpenCV debug window — same as the shipped game):
+
+```bat
+python scripts\run_server.py --headless
+```
+
+Same entry point as the `vision-server` console command after `pip install -e .`.
+
+<details>
+<summary>macOS / Linux</summary>
 
 ```bash
 source .venv/bin/activate
 python scripts/run_server.py
-# or: vision-server
-
-# Player-style run (no desktop webcam window; Unity calibrate panel still works):
+python scripts/run_server.py --camera-index 1
 python scripts/run_server.py --headless
 ```
 
+</details>
+
 - A webcam window opens with gesture overlays
 - Press **Q** to quit
+- Press **T** to hide/show the top-left HUD text (skeletons, lock ring, and pitch meter stay on)
 - Check terminal for: `Combined Vision Server Running. Sending UDP to 127.0.0.1:5052`
 
 ### On-screen labels
+
+Press **T** in the webcam window to hide or show this HUD. Hand skeletons, the player-lock ring, and the pitch meter stay visible.
 
 
 | Label                   | Meaning                                     |
@@ -109,9 +151,8 @@ GESTURE_NAME = "Idle"   # e.g. "Turn_Key", "Pull_Lever", "FP_Turn_Key"
 
 ### 2. Run the recorder
 
-```bash
-python scripts/record_data.py
-# or: vision-record
+```bat
+python scripts\record_data.py
 ```
 
 ### 3. Controls
@@ -147,9 +188,8 @@ data/
 
 After recording data:
 
-```bash
-python scripts/train_lstm.py
-# or: vision-train
+```bat
+python scripts\train_lstm.py
 ```
 
 This will:
@@ -207,10 +247,20 @@ python-vision-server/
 
 ### Evaluation (Layers A / B)
 
+```bat
+python eval\run_layer_a.py
+python eval\run_layer_b.py eval\videos\test_video_1.mp4
+```
+
+<details>
+<summary>macOS / Linux</summary>
+
 ```bash
 python eval/run_layer_a.py
-python eval/run_layer_b.py eval/videos/test_video_1.mp4   # after you record videos
+python eval/run_layer_b.py eval/videos/test_video_1.mp4
 ```
+
+</details>
 
 See `eval/README.md` and the repo-root `Gesture_Model_Evaluation_Plan.md`.
 
@@ -218,7 +268,7 @@ See `eval/README.md` and the repo-root `Gesture_Model_Evaluation_Plan.md`.
 
 ## Tests
 
-```bash
+```bat
 pytest
 ```
 
@@ -250,17 +300,17 @@ Key fields teammates may use:
 
 ---
 
-## Windows player freeze (teammate on a Windows PC)
+## Ship a Windows build (PyInstaller)
 
-Do **not** run this on macOS. PyInstaller must freeze on Windows.
+Do **not** run PyInstaller on macOS. Build on **Windows**.
 
 1. Put `models/escape_gestures.keras` in `models/` (gitignored; copy it over).
-2. One-time venv (Python 3.11): `py -3.11 -m venv .venv` then `pip install -r requirements.txt` and `pip install -e .`
+2. One-time venv (same as Setup above): `py -3.11 -m venv .venv`, activate, `pip install -r requirements.txt`, `pip install -e .`
 3. Double-click `scripts/build_windows.bat` (or run it from a prompt).
 4. Copy the whole `dist/VisionServer` folder next to the Unity game `.exe`.
-5. Launch the **game**. Unity starts `VisionServer/vision-server.exe` hidden. No OpenCV window, no console, no training files.
+5. Launch the **game**. Unity starts `VisionServer/vision-server.exe` hidden with the webcam index chosen on the consent screen. No OpenCV window, no console.
 
-Unity Editor play-mode does **not** auto-start the server — keep using `python scripts/run_server.py` while developing.
+Unity Editor play-mode does **not** auto-start the server — run `python scripts\run_server.py` yourself while developing (and set `CAMERA_INDEX` in `config.py` or pass `--camera-index`).
 
 ---
 
@@ -273,7 +323,8 @@ Unity Editor play-mode does **not** auto-start the server — keep using `python
 | Unity not responding | Unity must be running first; check port 5052                                    |
 | Hand not detected    | Better lighting, plain background, hand closer to camera                        |
 | LSTM always `Idle`   | Confidence < 0.8 — retrain with more data or check gesture motion               |
-| Webcam won't open    | Close other apps using the camera                                               |
-| Import errors        | Run `pip install -r requirements.txt` then `pip install -e .` from project root |
+| Webcam won't open    | Close other apps using the camera; try another index with `--camera-index 1` (or 2, 3, …) |
+| Import / pip errors  | Confirm **Python 3.11** venv is active (`python --version`). Delete `.venv`, recreate, then `pip install -r requirements.txt --force-reinstall` and `pip install -e .` |
+| Wrong Python version | Install Python 3.11 from python.org; use `py -3.11 -m venv .venv` on Windows   |
 
 

@@ -38,6 +38,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "Default: on when frozen (player build), otherwise SHOW_PREVIEW."
         ),
     )
+    parser.add_argument(
+        "--camera-index",
+        type=int,
+        default=None,
+        help=(
+            "OpenCV webcam index (0, 1, 2, …). "
+            "Default: CAMERA_INDEX in config.py."
+        ),
+    )
     return parser.parse_args(argv)
 
 

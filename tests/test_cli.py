@@ -13,6 +13,11 @@ def test_headless_flag():
     assert parse_args(["--no-headless"]).headless is False
 
 
+def test_camera_index_flag():
+    assert parse_args(["--camera-index", "2"]).camera_index == 2
+    assert parse_args([]).camera_index is None
+
+
 def test_resolve_show_preview_respects_flags():
     assert resolve_show_preview(SimpleNamespace(headless=True)) is False
     assert resolve_show_preview(SimpleNamespace(headless=False)) is True

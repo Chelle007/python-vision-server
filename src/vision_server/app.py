@@ -9,6 +9,7 @@ from vision_server.config import (
     ACTION_LATCH_HAND_LOST_FRAMES,
     CAMERA_FPS,
     CAMERA_HEIGHT,
+    CAMERA_INDEX,
     CAMERA_WIDTH,
     FACE_MESH_EVERY_N,
     FRAME_SLOW_MS,
@@ -17,6 +18,7 @@ from vision_server.config import (
     MEDIAPIPE_HAND_MODEL_COMPLEXITY,
     MEDIAPIPE_MIN_DETECTION_CONFIDENCE,
     MOVE_GESTURE_OVERRIDES,
+    SHOW_OVERLAY_HUD,
     TCP_REPORT_IP,
     TCP_REPORT_PORT,
     UDP_CONTROL_IP,
@@ -197,7 +199,12 @@ def main(argv=None):
     gesture_diag = GestureDiagnostics()
 
     # Threaded reader drops stale buffered frames while MediaPipe runs.
-    cap = LatestFrameCamera()
+    camera_index = (
+        args.camera_index
+        if args.camera_index is not None
+        else CAMERA_INDEX
+    )
+    cap = LatestFrameCamera(src=camera_index)
     cam_w, cam_h, cam_fps = cap.negotiated_size()
 
     print(f"Combined Vision Server Running. Sending UDP to {UDP_IP}:{UDP_PORT}")
@@ -210,12 +217,18 @@ def main(argv=None):
         f"Camera negotiated: {cam_w}x{cam_h} @ {cam_fps:.0f} fps "
         f"(requested {CAMERA_WIDTH}x{CAMERA_HEIGHT} @ {CAMERA_FPS})"
     )
+    show_hud = bool(SHOW_OVERLAY_HUD)
+
     if show_preview:
         print("Press Q to quit.  Press C to recalibrate look pitch neutral.")
         print("Press P to toggle puzzle mode (LSTM inference) — starts OFF.")
         print(
             "Press H to swap hand roles — action (grab/cursor/LSTM) hand starts "
             f"{hand_roles.action_hand.upper()}."
+        )
+        print(
+            "Press T to toggle the top-left HUD text "
+            f"(now {'ON' if show_hud else 'OFF'})."
         )
         print(
             f"Press M to toggle hand model 0/1 (now {hand_complexity}).  "
@@ -528,18 +541,19 @@ def main(argv=None):
             # event loop, and the keyboard. None of it is needed by Unity.
             key = 0xFF
             if show_preview:
-                overlay_lines = build_overlay_lines(data, lstm_display)
-                # Burned into the preview on purpose: these runs get recorded
-                # and compared later, and a clip that does not say which
-                # settings produced it is not evidence of anything.
-                overlay_lines.append(
-                    (
-                        f"HAND MODEL: {hand_complexity} (M)   "
-                        f"DET CONF: {hand_det_conf:.1f} (N)",
-                        (0, 255, 255),
+                if show_hud:
+                    overlay_lines = build_overlay_lines(data, lstm_display)
+                    # Burned into the preview on purpose: these runs get recorded
+                    # and compared later, and a clip that does not say which
+                    # settings produced it is not evidence of anything.
+                    overlay_lines.append(
+                        (
+                            f"HAND MODEL: {hand_complexity} (M)   "
+                            f"DET CONF: {hand_det_conf:.1f} (N)",
+                            (0, 255, 255),
+                        )
                     )
-                )
-                draw_overlay(frame, overlay_lines)
+                    draw_overlay(frame, overlay_lines)
                 draw_pitch_indicator(frame, data.get("head_pitch", 0.0))
                 draw_lock_ring(
                     frame,
@@ -591,6 +605,9 @@ def main(argv=None):
                     "Puzzle mode "
                     f"{'ON — LSTM predicting' if puzzle_gate.active else 'OFF — LSTM idle'}"
                 )
+            if key == ord("t"):
+                show_hud = not show_hud
+                print(f"Preview HUD {'ON' if show_hud else 'OFF'} (T)")
             if key in (ord("m"), ord("n")):
                 # Both settings are baked into the graph at construction, so a
                 # switch means rebuilding it. Measured at 17-32ms, and it also

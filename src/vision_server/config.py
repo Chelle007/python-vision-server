@@ -102,6 +102,9 @@ FRAME_SLOW_MS = 100.0
 # macOS HighGUI event loop is pure waste. False also disables the Q/C/P keys
 # (they come from cv2.waitKey) — quit with Ctrl-C instead.
 SHOW_PREVIEW = True
+# Top-left HUD on the OpenCV preview (LSTM, puzzle mode, gesture labels).
+# Toggle at runtime with T; skeletons, lock ring and pitch meter stay on.
+SHOW_OVERLAY_HUD = True
 # Periodic percentile summary, seconds between lines. 0 disables it.
 FRAME_STATS_INTERVAL_S = 5.0
 
