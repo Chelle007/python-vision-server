@@ -1,4 +1,5 @@
 import time
+from pathlib import Path
 
 import cv2
 import mediapipe as mp
@@ -9,7 +10,6 @@ from vision_server.config import (
     ACTION_LATCH_HAND_LOST_FRAMES,
     CAMERA_FPS,
     CAMERA_HEIGHT,
-    CAMERA_INDEX,
     CAMERA_WIDTH,
     FACE_MESH_EVERY_N,
     FRAME_SLOW_MS,
@@ -26,7 +26,16 @@ from vision_server.config import (
     UDP_IP,
     UDP_PORT,
 )
-from vision_server.cli import parse_args, prepare_frozen_cwd, resolve_show_preview
+from vision_server.cli import (
+    has_console,
+    list_cameras,
+    parse_args,
+    prepare_frozen_cwd,
+    redirect_output_to_log,
+    resolve_camera_index,
+    resolve_show_preview,
+    resolve_working_camera_index,
+)
 from vision_server.control import (
     apply_control_messages,
     create_control_socket,
@@ -149,9 +158,25 @@ def _append_hand_packet(data: dict, hand) -> None:
     )
 
 
+SNAPSHOT_INTERVAL_S = 10.0
+
+
 def main(argv=None):
     args = parse_args(argv)
     prepare_frozen_cwd()
+    # Diagnostic mode: enumerate cameras and exit before touching the pipeline.
+    # Run this from a console to find which index is the real webcam.
+    if getattr(args, "list_cameras", False):
+        list_cameras()
+        return
+    # A player run has no console and no debug window, so the numbers in
+    # [perf] are the only signal for "is the camera even usable" — this adds
+    # an actual picture. Overwritten every SNAPSHOT_INTERVAL_S so a bug
+    # report always carries what the camera saw most recently, not a frame
+    # from three sessions ago.
+    save_snapshots = not has_console()
+    if save_snapshots:
+        redirect_output_to_log(Path("logs") / "vision_server.log")
     show_preview = resolve_show_preview(args)
 
     apply_opencv_threads()
@@ -199,11 +224,14 @@ def main(argv=None):
     gesture_diag = GestureDiagnostics()
 
     # Threaded reader drops stale buffered frames while MediaPipe runs.
-    camera_index = (
-        args.camera_index
-        if args.camera_index is not None
-        else CAMERA_INDEX
+    camera_index, camera_index_source = resolve_camera_index(args)
+    # Fall back to any working camera if the chosen index has no device, so one
+    # build runs on both a single-camera laptop (webcam at 0) and a multi-camera
+    # PC (webcam at 1) without editing camera_index.txt.
+    camera_index, camera_index_source = resolve_working_camera_index(
+        camera_index, camera_index_source
     )
+    print(f"Using camera index {camera_index} (from {camera_index_source}).")
     cap = LatestFrameCamera(src=camera_index)
     cam_w, cam_h, cam_fps = cap.negotiated_size()
 
@@ -251,6 +279,8 @@ def main(argv=None):
     last_point = [-1.0, -1.0]
     frame_index = 0
     last_faces = []
+    last_snapshot_at = 0.0
+    snapshot_path = Path("logs") / "last_frame.jpg"
 
     try:
         while cap.isOpened():
@@ -278,6 +308,13 @@ def main(argv=None):
             frame = cv2.flip(frame, 1)
             rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             t_prep = time.perf_counter()
+
+            if save_snapshots:
+                now_mono = time.monotonic()
+                if now_mono - last_snapshot_at >= SNAPSHOT_INTERVAL_S:
+                    last_snapshot_at = now_mono
+                    snapshot_path.parent.mkdir(parents=True, exist_ok=True)
+                    cv2.imwrite(str(snapshot_path), frame)
 
             hand_results = hands.process(rgb)
             t_hands = time.perf_counter()

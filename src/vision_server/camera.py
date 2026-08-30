@@ -87,7 +87,15 @@ class LatestFrameCamera:
             self._thread.start()
 
     def _open_capture(self) -> Optional[cv2.VideoCapture]:
-        cap = cv2.VideoCapture(self._src)
+        # CAP_DSHOW: OpenCV's default backend on Windows can enumerate
+        # cameras in a different order than Unity's WebCamTexture, so an
+        # index picked in Unity's dropdown can silently open the wrong
+        # physical device in OpenCV (no crash, no error - just the wrong
+        # camera's feed, so mediapipe never sees a hand or face). DirectShow
+        # is the backend most Windows apps (Unity's WebCamTexture included)
+        # enumerate through, so requesting it explicitly is the standard fix
+        # for this class of mismatch.
+        cap = cv2.VideoCapture(self._src, cv2.CAP_DSHOW)
         if not cap.isOpened():
             try:
                 cap.release()
